@@ -3,8 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-// const authRoutes = require('./routes/auth');
-// const jobRoutes = require('./routes/jobs');
+const authRoutes = require('./routes/auth');
+const jobRoutes = require('./routes/jobs');
 
 const app = express();
 
@@ -16,8 +16,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// app.use('/api/auth', authRoutes);
-// app.use('/api/jobs', jobRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Global error handler — must have exactly 4 params so Express recognises it as an error handler
 // Must be registered after all routes or it won't catch their errors
