@@ -105,8 +105,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 32px;
-  padding-bottom: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -150,68 +150,80 @@
   border-color: var(--text);
 }
 
-/* Job table */
-.table-wrapper {
-  overflow-x: auto;
+/* Job cards */
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.jobs-table {
-  width: 100%;
-  border-collapse: collapse;
+.job-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.job-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.job-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.job-card-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.job-identity {
+  margin: 0;
   font-size: 15px;
 }
 
-.jobs-table th {
-  text-align: left;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
-}
-
-.jobs-table td {
-  padding: 14px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-
-.jobs-table tr:last-child td {
-  border-bottom: none;
-}
-
-.date-cell {
-  color: var(--text);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.actions-cell {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.btn-action {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 5px 10px;
-  font-size: 13px;
-  font-family: var(--sans);
+.job-company {
+  font-weight: 600;
   color: var(--text-h);
+}
+
+.job-title-sep {
+  margin: 0 6px;
+  color: var(--border);
+}
+
+.job-title {
+  color: var(--text);
+}
+
+.job-card-meta {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.btn-delete-card {
+  background: none;
+  border: none;
   cursor: pointer;
-  text-decoration: none;
-  transition: border-color 0.2s;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
 }
 
-.btn-action:hover {
-  border-color: var(--text);
-}
-
-.btn-delete:hover {
-  border-color: #ef4444;
+.btn-delete-card:hover {
   color: #ef4444;
+  background: #fee2e2;
 }
 
 /* Status badges */
@@ -290,7 +302,7 @@
   }
 }
 
-/* Select and textarea use the same style as input */
+/* Select and textarea — same style as input */
 .form-group select,
 .form-group textarea {
   padding: 10px 12px;
@@ -311,4 +323,36 @@
 
 .form-group textarea {
   resize: vertical;
+}
+
+/* Form bottom action row */
+.form-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.btn-secondary {
+  flex: 1;
+  max-width: 180px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 16px;
+  font-family: var(--sans);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--text);
+  color: var(--text-h);
+}
+
+.form-actions .btn-primary {
+  flex: 1;
+  max-width: 180px;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const STATUSES = ['Applied', 'OA', 'Interview', 'Offer', 'Rejected']
@@ -119,7 +119,6 @@ export default function JobForm() {
     <div className="form-page">
       <div className="form-card">
         <div className="form-page-header">
-          <Link to="/" className="back-link">← Back</Link>
           <h1>{isEditing ? 'Edit application' : 'Add application'}</h1>
         </div>
 
@@ -224,9 +223,14 @@ export default function JobForm() {
 
           {error && <p className="error-msg">{error}</p>}
 
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Saving…' : isEditing ? 'Save changes' : 'Add application'}
-          </button>
+          <div className="form-actions">
+            <button type="button" className="btn-secondary" onClick={() => navigate('/')}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Saving…' : isEditing ? 'Save changes' : 'Add application'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

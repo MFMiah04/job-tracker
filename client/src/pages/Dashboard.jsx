@@ -10,8 +10,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // useEffect with [] runs once after the component first mounts — like "on page load"
-  // Never fetch data directly in the component body — that runs on every render
   useEffect(() => {
     async function fetchJobs() {
       try {
@@ -34,7 +32,9 @@ export default function Dashboard() {
     fetchJobs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleDelete(id) {
+  async function handleDelete(id, e) {
+    // stopPropagation prevents the click from bubbling up to the card's onClick
+    e.stopPropagation()
     if (!window.confirm('Delete this job application?')) return
 
     const res = await fetch(`/api/jobs/${id}`, {
@@ -43,7 +43,6 @@ export default function Dashboard() {
     })
 
     if (res.ok) {
-      // Optimistic UI — filter out the deleted job immediately instead of re-fetching
       setJobs(jobs => jobs.filter(job => job.id !== id))
     }
   }
@@ -81,43 +80,47 @@ export default function Dashboard() {
       )}
 
       {jobs.length > 0 && (
-        <div className="table-wrapper">
-          <table className="jobs-table">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Applied</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* .map() turns the jobs array into an array of <tr> elements */}
-              {jobs.map(job => (
-                <tr key={job.id}>
-                  <td><strong>{job.company}</strong></td>
-                  <td>{job.job_title}</td>
-                  <td>
-                    <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
-                      {job.status}
-                    </span>
-                  </td>
-                  <td className="date-cell">
-                    {job.applied_at
-                      ? new Date(job.applied_at).toLocaleDateString('en-GB')
-                      : '—'}
-                  </td>
-                  <td className="actions-cell">
-                    <Link to={`/jobs/${job.id}/edit`} className="btn-action">Edit</Link>
-                    <button className="btn-action btn-delete" onClick={() => handleDelete(job.id)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="job-list">
+          {jobs.map(job => (
+            // Clicking anywhere on the card goes to the edit form
+            <div
+              key={job.id}
+              className="job-card"
+              onClick={() => navigate(`/jobs/${job.id}/edit`)}
+            >
+              <div className="job-card-top">
+                <p className="job-identity">
+                  <span className="job-company">{job.company}</span>
+                  <span className="job-title-sep">·</span>
+                  <span className="job-title">{job.job_title}</span>
+                </p>
+                <div className="job-card-right">
+                  <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
+                    {job.status}
+                  </span>
+                  <button
+                    className="btn-delete-card"
+                    onClick={(e) => handleDelete(job.id, e)}
+                    aria-label="Delete job"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {(job.applied_at || job.source || job.salary_min || job.salary_max) && (
+                <p className="job-card-meta">
+                  {[
+                    job.applied_at && new Date(job.applied_at).toLocaleDateString('en-GB'),
+                    job.source,
+                    (job.salary_min || job.salary_max) && [
+                      job.salary_min ? `£${job.salary_min.toLocaleString()}` : '',
+                      job.salary_max ? `£${job.salary_max.toLocaleString()}` : '',
+                    ].filter(Boolean).join(' – '),
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
