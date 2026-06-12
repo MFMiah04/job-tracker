@@ -114,3 +114,133 @@
   margin: 0;
   font-size: 28px;
 }
+
+.dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-email {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.btn-add {
+  width: auto;
+  display: inline-block;
+  text-decoration: none;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.btn-logout {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  color: var(--text-h);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: border-color 0.2s;
+}
+
+.btn-logout:hover {
+  border-color: var(--text);
+}
+
+/* Job table */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.jobs-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.jobs-table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.jobs-table tr:last-child td {
+  border-bottom: none;
+}
+
+.date-cell {
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-action {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text-h);
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.2s;
+}
+
+.btn-action:hover {
+  border-color: var(--text);
+}
+
+.btn-delete:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-applied    { background: #dbeafe; color: #1d4ed8; }
+.status-oa         { background: #fef3c7; color: #92400e; }
+.status-interview  { background: #ede9fe; color: #6d28d9; }
+.status-offer      { background: #dcfce7; color: #15803d; }
+.status-rejected   { background: #fee2e2; color: #b91c1c; }
+
+/* Empty state */
+.empty-state {
+  margin-top: 60px;
+  text-align: center;
+  color: var(--text);
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+
+.status-msg {
+  color: var(--text);
+}
