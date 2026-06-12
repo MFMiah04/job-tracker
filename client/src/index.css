@@ -1,111 +1,168 @@
+/* ============================================================
+   DESIGN SYSTEM — Job Tracker
+   Dark warm-grey base, cream/beige accent
+   ============================================================ */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* ----------------------------------------------------------
+     RAW COLOUR PALETTE
+     Warm grey scale (slightly warm undertone, not cold blue-grey)
+     ---------------------------------------------------------- */
+  --grey-900: hsl(38, 5%, 8%);
+  --grey-800: hsl(38, 5%, 11%);   /* base background */
+  --grey-700: hsl(38, 4%, 15%);   /* card / surface */
+  --grey-600: hsl(38, 4%, 20%);   /* raised surface */
+  --grey-500: hsl(38, 4%, 28%);   /* border */
+  --grey-400: hsl(38, 4%, 42%);   /* disabled / subtle */
+  --grey-300: hsl(38, 6%, 58%);   /* muted text */
+  --grey-200: hsl(38, 10%, 72%);  /* secondary text */
+  --grey-100: hsl(38, 20%, 88%);  /* primary text */
+  --grey-50:  hsl(38, 30%, 94%);  /* near-white */
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Cream / beige accent scale */
+  --cream-500: hsl(37, 40%, 50%);
+  --cream-400: hsl(37, 44%, 58%);
+  --cream-300: hsl(37, 48%, 68%);  /* primary accent */
+  --cream-200: hsl(37, 52%, 78%);  /* accent hover */
+  --cream-100: hsl(37, 55%, 88%);  /* accent subtle bg */
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  /* ----------------------------------------------------------
+     SEMANTIC TOKENS
+     These are what components actually use.
+     Raw values only change here if the palette changes.
+     ---------------------------------------------------------- */
+
+  /* Surfaces */
+  --color-bg:      var(--grey-800);
+  --color-surface: var(--grey-700);
+  --color-raised:  var(--grey-600);
+  --color-border:  var(--grey-500);
+
+  /* Text */
+  --color-text:        var(--grey-100);
+  --color-text-muted:  var(--grey-200);
+  --color-text-subtle: var(--grey-300);
+
+  /* Accent */
+  --color-accent:       var(--cream-300);
+  --color-accent-hover: var(--cream-200);
+  --color-accent-dim:   hsl(37, 48%, 68% / 15%);
+  --color-accent-text:  var(--grey-800);  /* text ON accent bg — must be dark */
+
+  /* Feedback */
+  --color-error: hsl(0, 65%, 60%);
+
+  /* ----------------------------------------------------------
+     BACKWARDS-COMPAT ALIASES
+     App.css was written with these short names.
+     Mapping them here means component CSS needs fewer changes.
+     ---------------------------------------------------------- */
+  --bg:      var(--color-bg);
+  --surface: var(--color-surface);
+  --border:  var(--color-border);
+  --text:    var(--color-text-muted);
+  --text-h:  var(--color-text);
+  --accent:  var(--color-accent);
+
+  /* ----------------------------------------------------------
+     SPACING SCALE  (multiples of 4)
+     ---------------------------------------------------------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ----------------------------------------------------------
+     TYPOGRAPHY
+     ---------------------------------------------------------- */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: ui-monospace, Consolas, monospace;
+
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-md:   16px;
+  --text-lg:   18px;
+  --text-xl:   24px;
+  --text-2xl:  28px;
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+
+  /* ----------------------------------------------------------
+     BORDER RADIUS
+     ---------------------------------------------------------- */
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-full: 9999px;
+
+  /* ----------------------------------------------------------
+     SHADOWS  (stronger on dark — black is visible)
+     ---------------------------------------------------------- */
+  --shadow-sm: 0 1px 3px hsl(0 0% 0% / 35%);
+  --shadow-md: 0 4px 12px hsl(0 0% 0% / 45%);
+
+  /* ----------------------------------------------------------
+     TRANSITIONS
+     ---------------------------------------------------------- */
+  --transition-fast:   all 150ms ease;
+  --transition-normal: all 300ms ease;
+  --transition-colors: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+/* Tell the browser this is a dark page — native elements
+   (scrollbars, date pickers, etc.) render in dark mode */
+html {
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  font-weight: var(--weight-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
-  width: 1126px;
+  width: 1100px;
   max-width: 100%;
   margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  border-inline: 1px solid var(--color-border);
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h1, h2, h3 {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  margin: 0;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
 }

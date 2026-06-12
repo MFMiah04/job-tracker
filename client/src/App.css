@@ -10,6 +10,7 @@
 .auth-card {
   width: 100%;
   max-width: 400px;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 40px;
@@ -55,28 +56,30 @@
 .btn-primary {
   width: 100%;
   padding: 10px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--color-accent);
+  /* cream accent needs dark text — white would fail contrast */
+  color: var(--color-accent-text);
   border: none;
   border-radius: 6px;
   font-size: 16px;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: var(--transition-colors);
 }
 
 .btn-primary:hover {
-  opacity: 0.85;
+  background: var(--color-accent-hover);
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 /* Error message */
 .error-msg {
-  color: #ef4444;
+  color: var(--color-error);
   font-size: 14px;
   margin-bottom: 12px;
 }
@@ -158,16 +161,17 @@
 }
 
 .job-card {
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 20px 24px;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: var(--transition-colors);
 }
 
 .job-card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
 }
 
 .job-card-top {
@@ -222,8 +226,8 @@
 }
 
 .btn-delete-card:hover {
-  color: #ef4444;
-  background: #fee2e2;
+  color: var(--color-error);
+  background: hsl(0, 28%, 22%);
 }
 
 /* Status badges */
@@ -235,11 +239,11 @@
   font-weight: 500;
 }
 
-.status-applied    { background: #dbeafe; color: #1d4ed8; }
-.status-oa         { background: #fef3c7; color: #92400e; }
-.status-interview  { background: #ede9fe; color: #6d28d9; }
-.status-offer      { background: #dcfce7; color: #15803d; }
-.status-rejected   { background: #fee2e2; color: #b91c1c; }
+.status-applied    { background: hsl(215, 30%, 20%); color: hsl(215, 75%, 72%); }
+.status-oa         { background: hsl(38,  30%, 20%); color: hsl(38,  75%, 72%); }
+.status-interview  { background: hsl(270, 28%, 24%); color: hsl(270, 65%, 78%); }
+.status-offer      { background: hsl(150, 28%, 18%); color: hsl(150, 55%, 62%); }
+.status-rejected   { background: hsl(0,   28%, 22%); color: hsl(0,   65%, 68%); }
 
 /* Empty state */
 .empty-state {
@@ -341,15 +345,15 @@
   border-radius: 6px;
   padding: 10px;
   font-size: 16px;
-  font-family: var(--sans);
-  color: var(--text);
+  font-family: var(--font-sans);
+  color: var(--color-text-muted);
   cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
+  transition: var(--transition-colors);
 }
 
 .btn-secondary:hover {
-  border-color: var(--text);
-  color: var(--text-h);
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .form-actions .btn-primary {
