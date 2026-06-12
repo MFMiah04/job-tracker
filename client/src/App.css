@@ -1,106 +1,144 @@
-/* Auth pages — centered card layout */
+/* ============================================================
+   APP STYLES — Job Tracker
+   All values reference design system tokens from index.css.
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   AUTH PAGES
+   ---------------------------------------------------------- */
 .auth-page {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
+  padding: var(--space-8) var(--space-5);
 }
 
 .auth-card {
   width: 100%;
   max-width: 400px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 40px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-10);
   text-align: left;
 }
 
 .auth-card h1 {
-  margin: 0 0 28px;
-  font-size: 28px;
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-2xl);
 }
 
-/* Form fields */
+/* ----------------------------------------------------------
+   FORM FIELDS
+   ---------------------------------------------------------- */
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .form-group label {
-  font-size: 14px;
-  color: var(--text-h);
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
 }
 
-.form-group input {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 16px;
-  background: var(--bg);
-  color: var(--text-h);
-  font-family: var(--sans);
-  transition: border-color 0.2s;
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  transition: var(--transition-colors);
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--color-accent);
 }
 
-/* Buttons */
+.form-group textarea {
+  resize: vertical;
+}
+
+/* ----------------------------------------------------------
+   BUTTONS
+   ---------------------------------------------------------- */
 .btn-primary {
   width: 100%;
   padding: 10px;
   background: var(--color-accent);
-  /* cream accent needs dark text — white would fail contrast */
-  color: var(--color-accent-text);
+  color: var(--color-accent-text);  /* dark text — cream bg needs contrast */
   border: none;
-  border-radius: 6px;
-  font-size: 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
   font-family: var(--font-sans);
   font-weight: var(--weight-medium);
   cursor: pointer;
   transition: var(--transition-colors);
 }
 
-.btn-primary:hover {
-  background: var(--color-accent-hover);
+.btn-primary:hover   { background: var(--color-accent-hover); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-secondary {
+  flex: 1;
+  max-width: 180px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition-colors);
 }
 
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.btn-secondary:hover {
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
-/* Error message */
+/* ----------------------------------------------------------
+   SHARED SMALL ELEMENTS
+   ---------------------------------------------------------- */
 .error-msg {
   color: var(--color-error);
-  font-size: 14px;
-  margin-bottom: 12px;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
 }
 
-/* Link between login and register */
 .auth-switch {
-  margin-top: 20px;
-  font-size: 14px;
+  margin-top: var(--space-5);
+  font-size: var(--text-sm);
   text-align: center;
-  color: var(--text);
+  color: var(--color-text-muted);
 }
 
 .auth-switch a {
-  color: var(--accent);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
-/* Dashboard */
+.status-msg {
+  color: var(--color-text-muted);
+}
+
+/* ----------------------------------------------------------
+   DASHBOARD
+   ---------------------------------------------------------- */
 .dashboard {
   flex: 1;
-  padding: 40px 32px;
+  padding: var(--space-10) var(--space-8);
   text-align: left;
 }
 
@@ -108,63 +146,64 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .dashboard-header h1 {
-  margin: 0;
-  font-size: 28px;
+  font-size: var(--text-2xl);
 }
 
 .dashboard-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .user-email {
-  font-size: 14px;
-  color: var(--text);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .btn-add {
   width: auto;
   display: inline-block;
   text-decoration: none;
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 8px var(--space-4);
+  font-size: var(--text-sm);
 }
 
 .btn-logout {
   background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 8px 14px;
-  font-size: 14px;
-  color: var(--text-h);
+  font-size: var(--text-sm);
+  color: var(--color-text);
   cursor: pointer;
-  font-family: var(--sans);
-  transition: border-color 0.2s;
+  font-family: var(--font-sans);
+  transition: var(--transition-colors);
 }
 
 .btn-logout:hover {
-  border-color: var(--text);
+  border-color: var(--color-text-muted);
 }
 
-/* Job cards */
+/* ----------------------------------------------------------
+   JOB CARDS
+   ---------------------------------------------------------- */
 .job-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .job-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
   cursor: pointer;
   transition: var(--transition-colors);
 }
@@ -178,51 +217,51 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .job-card-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
 .job-identity {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-base);
 }
 
 .job-company {
-  font-weight: 600;
-  color: var(--text-h);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
 }
 
 .job-title-sep {
   margin: 0 6px;
-  color: var(--border);
+  color: var(--color-border);
 }
 
 .job-title {
-  color: var(--text);
+  color: var(--color-text-muted);
 }
 
 .job-card-meta {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
 }
 
 .btn-delete-card {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text);
-  font-size: 13px;
+  color: var(--color-text-subtle);
+  font-size: var(--text-sm);
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   line-height: 1;
-  transition: color 0.15s, background 0.15s;
+  transition: var(--transition-fast);
 }
 
 .btn-delete-card:hover {
@@ -230,43 +269,45 @@
   background: hsl(0, 28%, 22%);
 }
 
-/* Status badges */
+/* ----------------------------------------------------------
+   STATUS BADGES
+   ---------------------------------------------------------- */
 .status-badge {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
 }
 
-.status-applied    { background: hsl(215, 30%, 20%); color: hsl(215, 75%, 72%); }
-.status-oa         { background: hsl(38,  30%, 20%); color: hsl(38,  75%, 72%); }
-.status-interview  { background: hsl(270, 28%, 24%); color: hsl(270, 65%, 78%); }
-.status-offer      { background: hsl(150, 28%, 18%); color: hsl(150, 55%, 62%); }
-.status-rejected   { background: hsl(0,   28%, 22%); color: hsl(0,   65%, 68%); }
+.status-applied   { background: hsl(215, 30%, 20%); color: hsl(215, 75%, 72%); }
+.status-oa        { background: hsl(38,  30%, 20%); color: hsl(38,  75%, 72%); }
+.status-interview { background: hsl(270, 28%, 24%); color: hsl(270, 65%, 78%); }
+.status-offer     { background: hsl(150, 28%, 18%); color: hsl(150, 55%, 62%); }
+.status-rejected  { background: hsl(0,   28%, 22%); color: hsl(0,   65%, 68%); }
 
-/* Empty state */
+/* ----------------------------------------------------------
+   EMPTY STATE
+   ---------------------------------------------------------- */
 .empty-state {
-  margin-top: 60px;
+  margin-top: var(--space-12);
   text-align: center;
-  color: var(--text);
+  color: var(--color-text-muted);
 }
 
 .empty-state p {
-  margin-bottom: 16px;
-  font-size: 16px;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-md);
 }
 
-.status-msg {
-  color: var(--text);
-}
-
-/* Job form page */
+/* ----------------------------------------------------------
+   JOB FORM PAGE
+   ---------------------------------------------------------- */
 .form-page {
   flex: 1;
   display: flex;
   justify-content: center;
-  padding: 40px 20px;
+  padding: var(--space-10) var(--space-5);
 }
 
 .form-card {
@@ -275,85 +316,40 @@
 }
 
 .form-page-header {
-  margin-bottom: 28px;
+  margin-bottom: var(--space-8);
 }
 
 .form-page-header h1 {
-  margin: 8px 0 0;
-  font-size: 24px;
+  font-size: var(--text-xl);
 }
 
 .back-link {
-  font-size: 14px;
-  color: var(--text);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
   text-decoration: none;
 }
 
 .back-link:hover {
-  color: var(--text-h);
+  color: var(--color-text);
 }
 
 /* Two-column row for paired fields */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 @media (max-width: 480px) {
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Select and textarea — same style as input */
-.form-group select,
-.form-group textarea {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 16px;
-  background: var(--bg);
-  color: var(--text-h);
-  font-family: var(--sans);
-  transition: border-color 0.2s;
-}
-
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.form-group textarea {
-  resize: vertical;
+  .form-row { grid-template-columns: 1fr; }
 }
 
 /* Form bottom action row */
 .form-actions {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 28px;
-}
-
-.btn-secondary {
-  flex: 1;
-  max-width: 180px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px;
-  font-size: 16px;
-  font-family: var(--font-sans);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: var(--transition-colors);
-}
-
-.btn-secondary:hover {
-  border-color: var(--color-text-muted);
-  color: var(--color-text);
+  gap: var(--space-2);
+  margin-top: var(--space-8);
 }
 
 .form-actions .btn-primary {
