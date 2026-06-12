@@ -116,6 +116,14 @@
   --transition-fast:   all 150ms ease;
   --transition-normal: all 300ms ease;
   --transition-colors: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+
+  /* ----------------------------------------------------------
+     BUTTON SIZING  (shared across all button variants)
+     ---------------------------------------------------------- */
+  --btn-padding:     var(--space-2) var(--space-3);
+  --btn-font-size:   var(--text-sm);
+  --btn-radius:      var(--radius-md);
+  --btn-font-weight: var(--weight-medium);
 }
 
 /* ============================================================
