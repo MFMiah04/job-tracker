@@ -13,7 +13,7 @@ const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Reje
 router.get('/', async (req, res, next) => {
   try {
     const result = await pool.query(
-      'SELECT * FROM jobs WHERE user_id = $1 ORDER BY applied_at DESC, created_at DESC',
+      'SELECT * FROM jobs WHERE user_id = $1 ORDER BY applied_at DESC NULLS LAST, created_at DESC',
       [req.user.id]
     );
     res.status(200).json(result.rows);
