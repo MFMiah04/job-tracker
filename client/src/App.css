@@ -283,6 +283,7 @@
   font-weight: var(--weight-medium);
 }
 
+.status-wishlist  { background: hsl(38,  15%, 18%); color: hsl(38,  30%, 65%); }
 .status-applied   { background: hsl(215, 30%, 20%); color: hsl(215, 75%, 72%); }
 .status-oa        { background: hsl(38,  30%, 20%); color: hsl(38,  75%, 72%); }
 .status-interview { background: hsl(270, 28%, 24%); color: hsl(270, 65%, 78%); }

@@ -7,7 +7,7 @@ const router = express.Router();
 // Protect all routes in this file — verifyToken runs before every handler below
 router.use(verifyToken);
 
-const VALID_STATUSES = ['Applied', 'OA', 'Interview', 'Offer', 'Rejected'];
+const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected'];
 
 // GET /api/jobs — get all jobs for the logged-in user
 router.get('/', async (req, res, next) => {
@@ -31,7 +31,7 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Company and job title are required' });
     }
 
-    const jobStatus = status || 'Applied';
+    const jobStatus = status || 'Wishlist';
     if (!VALID_STATUSES.includes(jobStatus)) {
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
     }

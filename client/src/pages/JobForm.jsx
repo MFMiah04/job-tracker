@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-const STATUSES = ['Applied', 'OA', 'Interview', 'Offer', 'Rejected']
+const STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
 
 const EMPTY_FORM = {
   company: '',
   job_title: '',
-  status: 'Applied',
+  status: 'Wishlist',
   source: '',
   salary_min: '',
   salary_max: '',
@@ -45,7 +45,7 @@ export default function JobForm() {
         setForm({
           company: data.company || '',
           job_title: data.job_title || '',
-          status: data.status || 'Applied',
+          status: data.status || 'Wishlist',
           source: data.source || '',
           salary_min: data.salary_min ?? '',
           salary_max: data.salary_max ?? '',
