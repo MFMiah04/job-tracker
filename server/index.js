@@ -2,9 +2,11 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const pool = require('./db');
 
 const authRoutes = require('./routes/auth');
 const jobRoutes = require('./routes/jobs');
+const experimentRoutes = require('./routes/experiments');
 
 const app = express();
 
@@ -18,6 +20,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/experiments', experimentRoutes);
 
 // Global error handler — must have exactly 4 params so Express recognises it as an error handler
 // Must be registered after all routes or it won't catch their errors
@@ -29,6 +32,24 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+async function start() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS experiments (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      start_date DATE,
+      end_date   DATE,
+      notes      TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+start().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

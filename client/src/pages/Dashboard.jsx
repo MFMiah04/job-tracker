@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+
+const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
 
 export default function Dashboard() {
   const { user, token, logout } = useAuth()
@@ -31,6 +33,35 @@ export default function Dashboard() {
 
     fetchJobs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleStatusChange(e, job, direction) {
+    e.stopPropagation()
+    const currentIndex = VALID_STATUSES.indexOf(job.status)
+    const newStatus = VALID_STATUSES[(currentIndex + direction + VALID_STATUSES.length) % VALID_STATUSES.length]
+
+    // Optimistic update
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j))
+
+    const res = await fetch(`/api/jobs/${job.id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company: job.company,
+        job_title: job.job_title,
+        source: job.source,
+        status: newStatus,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        notes: job.notes,
+        applied_at: job.applied_at,
+      }),
+    })
+
+    if (!res.ok) {
+      // Roll back on error
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: job.status } : j))
+    }
+  }
 
   async function handleDelete(id, e) {
     // stopPropagation prevents the click from bubbling up to the card's onClick
@@ -67,6 +98,15 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <nav className="page-tabs">
+        <NavLink to="/" end className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
+          Applications
+        </NavLink>
+        <NavLink to="/stats" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
+          Stats
+        </NavLink>
+      </nav>
+
       {loading && <p className="status-msg">Loading…</p>}
       {error && <p className="error-msg">{error}</p>}
 
@@ -95,9 +135,19 @@ export default function Dashboard() {
                   <span className="job-title">{job.job_title}</span>
                 </p>
                 <div className="job-card-right">
+                  <button
+                    className="btn-status-cycle"
+                    onClick={(e) => handleStatusChange(e, job, -1)}
+                    aria-label="Previous status"
+                  >◀</button>
                   <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
                     {job.status}
                   </span>
+                  <button
+                    className="btn-status-cycle"
+                    onClick={(e) => handleStatusChange(e, job, 1)}
+                    aria-label="Next status"
+                  >▶</button>
                   <button
                     className="btn-delete-card"
                     onClick={(e) => handleDelete(job.id, e)}
