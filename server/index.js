@@ -44,6 +44,15 @@ async function start() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS job_status_events (
+      id         SERIAL PRIMARY KEY,
+      job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS furthest_status TEXT`);
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

@@ -11,7 +11,6 @@ const EMPTY_FORM = {
   source: '',
   salary_min: '',
   salary_max: '',
-  applied_at: '',
   notes: '',
 }
 
@@ -26,6 +25,9 @@ export default function JobForm() {
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
   const [error, setError] = useState('')
+  const [events, setEvents] = useState([])
+  const [showAddEvent, setShowAddEvent] = useState(false)
+  const [newEvent, setNewEvent] = useState({ status: 'Applied', created_at: '' })
 
   // In edit mode, fetch the existing job and pre-populate the form
   useEffect(() => {
@@ -33,11 +35,12 @@ export default function JobForm() {
 
     async function fetchJob() {
       try {
-        const res = await fetch(`/api/jobs/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const data = await res.json()
-        if (!res.ok) {
+        const [jobRes, eventsRes] = await Promise.all([
+          fetch(`/api/jobs/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/jobs/${id}/events`, { headers: { Authorization: `Bearer ${token}` } }),
+        ])
+        const data = await jobRes.json()
+        if (!jobRes.ok) {
           setFetchError(data.error || 'Failed to load job')
           return
         }
@@ -49,9 +52,9 @@ export default function JobForm() {
           source: data.source || '',
           salary_min: data.salary_min ?? '',
           salary_max: data.salary_max ?? '',
-          applied_at: data.applied_at ? data.applied_at.slice(0, 10) : '',
           notes: data.notes || '',
         })
+        if (eventsRes.ok) setEvents(await eventsRes.json())
       } catch {
         setFetchError('Network error — is the server running?')
       }
@@ -65,6 +68,47 @@ export default function JobForm() {
   function handleChange(e) {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleEventDateBlur(eventId, newDate) {
+    if (!newDate) return
+    await fetch(`/api/jobs/${id}/events/${eventId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ created_at: newDate }),
+    })
+  }
+
+  async function handleEventStatusChange(ev, newStatus) {
+    setEvents(prev => prev.map(e => e.id === ev.id ? { ...e, status: newStatus } : e))
+    await fetch(`/api/jobs/${id}/events/${ev.id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+  }
+
+  async function handleDeleteEvent(eventId) {
+    const res = await fetch(`/api/jobs/${id}/events/${eventId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) setEvents(prev => prev.filter(e => e.id !== eventId))
+  }
+
+  async function handleAddEvent() {
+    if (!newEvent.created_at) return
+    const res = await fetch(`/api/jobs/${id}/events`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEvent),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setEvents(prev => [...prev, data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)))
+      setNewEvent({ status: 'Applied', created_at: '' })
+      setShowAddEvent(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -87,7 +131,6 @@ export default function JobForm() {
           ...form,
           salary_min: form.salary_min === '' ? null : Number(form.salary_min),
           salary_max: form.salary_max === '' ? null : Number(form.salary_max),
-          applied_at: form.applied_at || null,
         }),
       })
 
@@ -199,17 +242,6 @@ export default function JobForm() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="applied_at">Date applied</label>
-            <input
-              id="applied_at"
-              name="applied_at"
-              type="date"
-              value={form.applied_at}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div className="form-group">
             <label htmlFor="notes">Notes</label>
             <textarea
               id="notes"
@@ -222,6 +254,62 @@ export default function JobForm() {
           </div>
 
           {error && <p className="error-msg">{error}</p>}
+
+          {isEditing && (
+            <div className="history-section">
+              <p className="history-label">History</p>
+              <ul className="event-list">
+                {events.map((ev) => (
+                  <li key={ev.id} className="event-row event-row-edit">
+                    <select
+                      className={`event-status-select status-${ev.status.toLowerCase().replace(' ', '-')}`}
+                      value={ev.status}
+                      onChange={e => handleEventStatusChange(ev, e.target.value)}
+                    >
+                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <input
+                      type="date"
+                      className="event-date-input"
+                      value={ev.created_at ? ev.created_at.slice(0, 10) : ''}
+                      onChange={e => setEvents(prev => prev.map(x => x.id === ev.id ? { ...x, created_at: e.target.value } : x))}
+                      onBlur={e => handleEventDateBlur(ev.id, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn-delete-event"
+                      onClick={() => handleDeleteEvent(ev.id)}
+                      aria-label="Remove event"
+                    >✕</button>
+                  </li>
+                ))}
+              </ul>
+
+              {showAddEvent ? (
+                <div className="add-event-form">
+                  <select
+                    className={`event-status-select status-${newEvent.status.toLowerCase().replace(' ', '-')}`}
+                    value={newEvent.status}
+                    onChange={e => setNewEvent(p => ({ ...p, status: e.target.value }))}
+                  >
+                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <input
+                    type="date"
+                    className="event-date-input"
+                    value={newEvent.created_at}
+                    onChange={e => setNewEvent(p => ({ ...p, created_at: e.target.value }))}
+                  />
+                  <button type="button" className="btn-add-event-confirm" onClick={handleAddEvent}>Add</button>
+                  <button type="button" className="btn-delete-event" onClick={() => setShowAddEvent(false)}>✕</button>
+                </div>
+              ) : (
+                <button type="button" className="btn-add-exp" onClick={() => setShowAddEvent(true)}>
+                  + Add event
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="form-actions">
             <button type="button" className="btn-secondary" onClick={() => navigate('/')}>

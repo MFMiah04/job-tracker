@@ -238,7 +238,23 @@ export default function Stats() {
     ? Math.round((responded.length / submitted.length) * 100)
     : 0
 
-  const funnelData = FUNNEL_STAGES.map(s => ({ name: s, value: byStatus[s] || 0 }))
+  // Cumulative funnel — a job at Interview counts towards Applied, OA, and Interview
+  const PIPELINE_ORDER = ['Applied', 'OA', 'Interview', 'Offer']
+  const funnelData = FUNNEL_STAGES.map(stage => ({
+    name: stage,
+    value: filteredJobs.filter(j => {
+      const furthest = j.furthest_status || (j.status !== 'Rejected' ? j.status : null)
+      if (!furthest) return false
+      return PIPELINE_ORDER.indexOf(furthest) >= PIPELINE_ORDER.indexOf(stage)
+    }).length,
+  }))
+
+  // Rejection breakdown by furthest stage reached
+  const rejectedJobs = filteredJobs.filter(j => j.status === 'Rejected')
+  const rejectionsByStage = PIPELINE_ORDER.map(stage => ({
+    stage,
+    count: rejectedJobs.filter(j => (j.furthest_status || 'Applied') === stage).length,
+  })).filter(r => r.count > 0)
 
   const isDaily = period === 'week' || period === 'month'
   const chartData = isDaily
@@ -328,6 +344,11 @@ export default function Stats() {
                   </Funnel>
                 </FunnelChart>
               </ResponsiveContainer>
+            )}
+            {rejectionsByStage.length > 0 && (
+              <p className="rejection-breakdown">
+                Rejections — {rejectionsByStage.map(r => `post-${r.stage} (${r.count})`).join(' · ')}
+              </p>
             )}
           </div>
 

@@ -4,6 +4,10 @@ import { useAuth } from '../context/AuthContext'
 
 const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
 
+function daysBetween(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000)
+}
+
 export default function Dashboard() {
   const { user, token, logout } = useAuth()
   const navigate = useNavigate()
@@ -11,6 +15,8 @@ export default function Dashboard() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedId, setExpandedId] = useState(null)
+  const [jobEvents, setJobEvents] = useState({}) // { [jobId]: events[] }
 
   useEffect(() => {
     async function fetchJobs() {
@@ -33,6 +39,27 @@ export default function Dashboard() {
 
     fetchJobs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleCardHeaderClick(e, jobId) {
+    e.stopPropagation()
+    if (expandedId === jobId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(jobId)
+    // Lazy-load events on first expand
+    if (!jobEvents[jobId]) {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/events`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setJobEvents(prev => ({ ...prev, [jobId]: data }))
+        }
+      } catch {}
+    }
+  }
 
   async function handleStatusChange(e, job, direction) {
     e.stopPropagation()
@@ -60,11 +87,22 @@ export default function Dashboard() {
     if (!res.ok) {
       // Roll back on error
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: job.status } : j))
+      return
+    }
+
+    // Re-fetch events — update cache if card is expanded, clear it if not
+    const evRes = await fetch(`/api/jobs/${job.id}/events`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (evRes.ok) {
+      const evData = await evRes.json()
+      setJobEvents(prev => ({ ...prev, [job.id]: evData }))
+    } else {
+      setJobEvents(prev => { const n = { ...prev }; delete n[job.id]; return n })
     }
   }
 
   async function handleDelete(id, e) {
-    // stopPropagation prevents the click from bubbling up to the card's onClick
     e.stopPropagation()
     if (!window.confirm('Delete this job application?')) return
 
@@ -75,6 +113,7 @@ export default function Dashboard() {
 
     if (res.ok) {
       setJobs(jobs => jobs.filter(job => job.id !== id))
+      if (expandedId === id) setExpandedId(null)
     }
   }
 
@@ -121,56 +160,89 @@ export default function Dashboard() {
 
       {jobs.length > 0 && (
         <div className="job-list">
-          {jobs.map(job => (
-            // Clicking anywhere on the card goes to the edit form
-            <div
-              key={job.id}
-              className="job-card"
-              onClick={() => navigate(`/jobs/${job.id}/edit`)}
-            >
-              <div className="job-card-top">
-                <p className="job-identity">
-                  <span className="job-company">{job.company}</span>
-                  <span className="job-title-sep">·</span>
-                  <span className="job-title">{job.job_title}</span>
-                </p>
-                <div className="job-card-right">
-                  <button
-                    className="btn-status-cycle"
-                    onClick={(e) => handleStatusChange(e, job, -1)}
-                    aria-label="Previous status"
-                  >◀</button>
-                  <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
-                    {job.status}
-                  </span>
-                  <button
-                    className="btn-status-cycle"
-                    onClick={(e) => handleStatusChange(e, job, 1)}
-                    aria-label="Next status"
-                  >▶</button>
-                  <button
-                    className="btn-delete-card"
-                    onClick={(e) => handleDelete(job.id, e)}
-                    aria-label="Delete job"
-                  >
-                    ✕
-                  </button>
+          {jobs.map(job => {
+            const isExpanded = expandedId === job.id
+            const events = jobEvents[job.id] || []
+
+            return (
+              <div key={job.id} className={`job-card${isExpanded ? ' expanded' : ''}`} onClick={() => navigate(`/jobs/${job.id}/edit`)}>
+                {/* Header row — click to expand/collapse */}
+                <div
+                  className="job-card-top"
+                  onClick={(e) => handleCardHeaderClick(e, job.id)}
+                >
+                  <p className="job-identity">
+                    <span className="job-company">{job.company}</span>
+                    <span className="job-title-sep">·</span>
+                    <span className="job-title">{job.job_title}</span>
+                  </p>
+                  <div className="job-card-right">
+                    <button
+                      className="btn-status-cycle"
+                      onClick={(e) => handleStatusChange(e, job, -1)}
+                      aria-label="Previous status"
+                    >◀</button>
+                    <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
+                      {job.status}
+                    </span>
+                    <button
+                      className="btn-status-cycle"
+                      onClick={(e) => handleStatusChange(e, job, 1)}
+                      aria-label="Next status"
+                    >▶</button>
+                    <button
+                      className="btn-delete-card"
+                      onClick={(e) => handleDelete(job.id, e)}
+                      aria-label="Delete job"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
+
+                {/* Meta row */}
+                {(job.salary_min || job.salary_max) && (
+                  <p className="job-card-meta">
+                    {[
+                      (job.salary_min || job.salary_max) && [
+                        job.salary_min ? `£${job.salary_min.toLocaleString()}` : '',
+                        job.salary_max ? `£${job.salary_max.toLocaleString()}` : '',
+                      ].filter(Boolean).join(' – '),
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+
+                {/* Expanded history */}
+                {isExpanded && (
+                  <div className="job-card-history">
+                    {events.length === 0 ? (
+                      <p className="event-empty">No status history yet.</p>
+                    ) : (
+                      <ul className="event-list">
+                        {events.map((ev, i) => {
+                          const prev = events[i - 1]
+                          const days = prev ? daysBetween(prev.created_at, ev.created_at) : null
+                          return (
+                            <li key={i} className="event-row">
+                              <span className={`status-badge status-${ev.status.toLowerCase().replace(' ', '-')} event-badge`}>
+                                {ev.status}
+                              </span>
+                              <span className="event-date">
+                                {new Date(ev.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                              {days !== null && days > 0 && (
+                                <span className="event-delta">+{days}d</span>
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
-              {(job.applied_at || job.source || job.salary_min || job.salary_max) && (
-                <p className="job-card-meta">
-                  {[
-                    job.applied_at && new Date(job.applied_at).toLocaleDateString('en-GB'),
-                    job.source,
-                    (job.salary_min || job.salary_max) && [
-                      job.salary_min ? `£${job.salary_min.toLocaleString()}` : '',
-                      job.salary_max ? `£${job.salary_max.toLocaleString()}` : '',
-                    ].filter(Boolean).join(' – '),
-                  ].filter(Boolean).join(' · ')}
-                </p>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
