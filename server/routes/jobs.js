@@ -11,10 +11,43 @@ const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Reje
 // Statuses that can become furthest_status (Rejected and Wishlist excluded)
 const PIPELINE = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer'];
 
-function isFurther(newStatus, currentFurthest) {
-  const ni = PIPELINE.indexOf(newStatus);
-  const ci = PIPELINE.indexOf(currentFurthest || 'Wishlist');
-  return ni > ci;
+async function recalculateJobStatus(jobId) {
+  const events = await pool.query(
+    `SELECT status, created_at FROM job_status_events WHERE job_id = $1
+     ORDER BY
+       created_at::date DESC,
+       CASE status WHEN 'Wishlist' THEN 0 WHEN 'Applied' THEN 1 WHEN 'OA' THEN 2
+                   WHEN 'Interview' THEN 3 WHEN 'Offer' THEN 4 WHEN 'Rejected' THEN 5
+                   ELSE 0 END DESC,
+       created_at DESC`,
+    [jobId]
+  );
+  // If there are any non-Wishlist events, use the most recent of those as current
+  // status — this prevents a backdated Applied event from being "beaten" by the
+  // auto-created Wishlist event which carries the tracker-entry timestamp.
+  const nonWishlist = events.rows.filter(ev => ev.status !== 'Wishlist');
+  const latestStatus = nonWishlist.length > 0 ? nonWishlist[0].status : 'Wishlist';
+
+  let furthestStatus = null;
+  for (const ev of events.rows) {
+    if (ev.status !== 'Rejected' && ev.status !== 'Wishlist') {
+      if (PIPELINE.indexOf(ev.status) > PIPELINE.indexOf(furthestStatus || 'Wishlist')) {
+        furthestStatus = ev.status;
+      }
+    }
+  }
+
+  // applied_at = date of the earliest 'Applied' event, so the stats chart reflects
+  // when the user actually applied rather than when the tracker entry was created.
+  const firstApplied = events.rows
+    .filter(ev => ev.status === 'Applied')
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+  const appliedAt = firstApplied ? firstApplied.created_at : null;
+
+  await pool.query(
+    'UPDATE jobs SET status = $1, furthest_status = $2, applied_at = $3 WHERE id = $4',
+    [latestStatus, furthestStatus, appliedAt, jobId]
+  );
 }
 
 // GET /api/jobs — get all jobs for the logged-in user
@@ -59,14 +92,7 @@ router.post('/', async (req, res, next) => {
       [newJob.id, jobStatus]
     );
 
-    // Set furthest_status if job starts further than Wishlist
-    if (jobStatus !== 'Wishlist' && jobStatus !== 'Rejected') {
-      await pool.query(
-        'UPDATE jobs SET furthest_status = $1 WHERE id = $2',
-        [jobStatus, newJob.id]
-      );
-      newJob.furthest_status = jobStatus;
-    }
+    await recalculateJobStatus(newJob.id);
 
     res.status(201).json(newJob);
   } catch (err) {
@@ -93,60 +119,29 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// PUT /api/jobs/:id — update a job
+// PUT /api/jobs/:id — update a job (fields only — status is derived from event history)
 router.put('/:id', async (req, res, next) => {
   try {
-    const { company, job_title, source, status, salary_min, salary_max, notes } = req.body;
+    const { company, job_title, source, salary_min, salary_max, notes } = req.body;
 
     if (!company || !job_title) {
       return res.status(400).json({ error: 'Company and job title are required' });
     }
 
-    if (status && !VALID_STATUSES.includes(status)) {
-      return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
-    }
-
-    // Fetch current job first to detect status change and furthest_status
-    const current = await pool.query(
-      'SELECT status, furthest_status FROM jobs WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.id]
-    );
-    if (current.rows.length === 0) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-    const currentJob = current.rows[0];
-
     const result = await pool.query(
       `UPDATE jobs
-       SET company=$1, job_title=$2, source=$3, status=$4,
-           salary_min=$5, salary_max=$6, notes=$7
-       WHERE id=$8 AND user_id=$9
+       SET company=$1, job_title=$2, source=$3,
+           salary_min=$4, salary_max=$5, notes=$6
+       WHERE id=$7 AND user_id=$8
        RETURNING *`,
-      [company, job_title, source, status, salary_min, salary_max, notes, req.params.id, req.user.id]
+      [company, job_title, source, salary_min, salary_max, notes, req.params.id, req.user.id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    const updatedJob = result.rows[0];
-
-    // Log event and update furthest_status if status changed
-    if (status && status !== currentJob.status) {
-      await pool.query(
-        'INSERT INTO job_status_events (job_id, status) VALUES ($1, $2)',
-        [req.params.id, status]
-      );
-      if (status !== 'Rejected' && isFurther(status, currentJob.furthest_status)) {
-        await pool.query(
-          'UPDATE jobs SET furthest_status = $1 WHERE id = $2',
-          [status, req.params.id]
-        );
-        updatedJob.furthest_status = status;
-      }
-    }
-
-    res.status(200).json(updatedJob);
+    res.status(200).json(result.rows[0]);
   } catch (err) {
     next(err);
   }
@@ -161,7 +156,12 @@ router.get('/:id/events', async (req, res, next) => {
        FROM job_status_events e
        JOIN jobs j ON j.id = e.job_id
        WHERE e.job_id = $1 AND j.user_id = $2
-       ORDER BY e.created_at ASC`,
+       ORDER BY
+         CASE e.status WHEN 'Wishlist' THEN 0 WHEN 'Applied' THEN 1 WHEN 'OA' THEN 2
+                       WHEN 'Interview' THEN 3 WHEN 'Offer' THEN 4 WHEN 'Rejected' THEN 5
+                       ELSE 0 END ASC,
+         e.created_at::date ASC,
+         e.created_at ASC`,
       [req.params.id, req.user.id]
     );
     res.status(200).json(result.rows);
@@ -186,6 +186,7 @@ router.post('/:id/events', async (req, res, next) => {
        VALUES ($1, $2, $3) RETURNING *`,
       [req.params.id, status, created_at || new Date()]
     );
+    await recalculateJobStatus(req.params.id);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     next(err);
@@ -209,6 +210,7 @@ router.put('/:id/events/:eventId', async (req, res, next) => {
       [status || null, created_at || null, req.params.eventId, req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
+    await recalculateJobStatus(req.params.id);
     res.status(200).json(result.rows[0]);
   } catch (err) {
     next(err);
@@ -226,6 +228,7 @@ router.delete('/:id/events/:eventId', async (req, res, next) => {
       [req.params.eventId, req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
+    await recalculateJobStatus(req.params.id);
     res.status(200).json({ message: 'Deleted' });
   } catch (err) {
     next(err);
@@ -252,3 +255,4 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.recalculateJobStatus = recalculateJobStatus;

@@ -69,19 +69,10 @@ export default function Dashboard() {
     // Optimistic update
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j))
 
-    const res = await fetch(`/api/jobs/${job.id}`, {
-      method: 'PUT',
+    const res = await fetch(`/api/jobs/${job.id}/events`, {
+      method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        company: job.company,
-        job_title: job.job_title,
-        source: job.source,
-        status: newStatus,
-        salary_min: job.salary_min,
-        salary_max: job.salary_max,
-        notes: job.notes,
-        applied_at: job.applied_at,
-      }),
+      body: JSON.stringify({ status: newStatus }),
     })
 
     if (!res.ok) {
@@ -90,7 +81,7 @@ export default function Dashboard() {
       return
     }
 
-    // Re-fetch events — update cache if card is expanded, clear it if not
+    // Re-fetch events to keep history panel up to date
     const evRes = await fetch(`/api/jobs/${job.id}/events`, {
       headers: { Authorization: `Bearer ${token}` },
     })

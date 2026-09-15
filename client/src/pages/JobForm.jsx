@@ -7,7 +7,6 @@ const STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
 const EMPTY_FORM = {
   company: '',
   job_title: '',
-  status: 'Wishlist',
   source: '',
   salary_min: '',
   salary_max: '',
@@ -44,11 +43,9 @@ export default function JobForm() {
           setFetchError(data.error || 'Failed to load job')
           return
         }
-        // applied_at comes back as a full ISO timestamp — slice to YYYY-MM-DD for the date input
         setForm({
           company: data.company || '',
           job_title: data.job_title || '',
-          status: data.status || 'Wishlist',
           source: data.source || '',
           salary_min: data.salary_min ?? '',
           salary_max: data.salary_max ?? '',
@@ -105,7 +102,13 @@ export default function JobForm() {
     })
     if (res.ok) {
       const data = await res.json()
-      setEvents(prev => [...prev, data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)))
+      const PIPELINE_RANK = { Wishlist: 0, Applied: 1, OA: 2, Interview: 3, Offer: 4, Rejected: 5 }
+      setEvents(prev => [...prev, data].sort((a, b) => {
+        const rankDiff = (PIPELINE_RANK[a.status] ?? 0) - (PIPELINE_RANK[b.status] ?? 0)
+        if (rankDiff !== 0) return rankDiff
+        const da = a.created_at.slice(0, 10), db = b.created_at.slice(0, 10)
+        return da < db ? -1 : da > db ? 1 : 0
+      }))
       setNewEvent({ status: 'Applied', created_at: '' })
       setShowAddEvent(false)
     }
@@ -191,20 +194,7 @@ export default function JobForm() {
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="status">Status</label>
-              <select
-                id="status"
-                name="status"
-                value={form.status}
-                onChange={handleChange}
-              >
-                {STATUSES.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
+          <div className="form-row-salaries">
             <div className="form-group">
               <label htmlFor="source">Source</label>
               <input
@@ -216,9 +206,6 @@ export default function JobForm() {
                 onChange={handleChange}
               />
             </div>
-          </div>
-
-          <div className="form-row">
             <div className="form-group">
               <label htmlFor="salary_min">Salary min (£)</label>
               <input

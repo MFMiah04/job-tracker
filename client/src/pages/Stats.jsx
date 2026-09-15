@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   ResponsiveContainer,
@@ -157,6 +157,9 @@ export default function Stats() {
   const [showAddExp, setShowAddExp] = useState(false)
   const [newExp, setNewExp] = useState({ name: '', start_date: '', end_date: '', notes: '' })
   const [expError, setExpError] = useState('')
+  const [editingExp, setEditingExp] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', start_date: '', end_date: '', notes: '' })
+  const [editError, setEditError] = useState('')
 
   // A/B compare
   const [showAB, setShowAB]   = useState(false)
@@ -213,6 +216,28 @@ export default function Stats() {
     setExperiments(prev => [data, ...prev])
     setNewExp({ name: '', start_date: '', end_date: '', notes: '' })
     setShowAddExp(false)
+  }
+
+  function handleEditStart(exp) {
+    setEditingExp(exp)
+    setEditForm({ name: exp.name, start_date: exp.start_date || '', end_date: exp.end_date || '', notes: exp.notes || '' })
+    setShowAddExp(false)
+    setEditError('')
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault()
+    setEditError('')
+    if (!editForm.name.trim()) { setEditError('Name is required'); return }
+    const res = await fetch(`/api/experiments/${editingExp.id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    })
+    const data = await res.json()
+    if (!res.ok) { setEditError(data.error || 'Failed to save'); return }
+    setExperiments(prev => prev.map(e => e.id === editingExp.id ? data : e))
+    setEditingExp(null)
   }
 
   async function handleDeleteExp(id) {
@@ -272,6 +297,9 @@ export default function Stats() {
         <h1>Job Tracker</h1>
         <div className="dashboard-actions">
           <span className="user-email">{user?.email}</span>
+          <Link to="/jobs/new" className="btn-primary btn-add">
+            + Add job
+          </Link>
           <button className="btn-logout" onClick={handleLogout}>Log out</button>
         </div>
       </div>
@@ -426,7 +454,7 @@ export default function Stats() {
                           <td className="changelog-notes">{exp.notes || '—'}</td>
                           <td className="changelog-actions">
                             <button
-                              className="btn-set-period"
+                              className={`btn-set-period${periodA.from === (exp.start_date || '') && periodA.to === (exp.end_date || '') ? ' selected' : ''}`}
                               title="Set as Period A"
                               onClick={() => {
                                 setPeriodA({ from: exp.start_date || '', to: exp.end_date || '' })
@@ -434,13 +462,18 @@ export default function Stats() {
                               }}
                             >A</button>
                             <button
-                              className="btn-set-period"
+                              className={`btn-set-period${periodB.from === (exp.start_date || '') && periodB.to === (exp.end_date || '') ? ' selected' : ''}`}
                               title="Set as Period B"
                               onClick={() => {
                                 setPeriodB({ from: exp.start_date || '', to: exp.end_date || '' })
                                 setShowAB(true)
                               }}
                             >B</button>
+                            <button
+                              className={`btn-set-period${editingExp?.id === exp.id ? ' selected' : ''}`}
+                              title="Edit entry"
+                              onClick={() => editingExp?.id === exp.id ? setEditingExp(null) : handleEditStart(exp)}
+                            >✎</button>
                             <button
                               className="btn-delete-exp"
                               onClick={() => handleDeleteExp(exp.id)}
@@ -453,7 +486,54 @@ export default function Stats() {
                   </table>
                 )}
 
-                {!showAddExp ? (
+                {editingExp ? (
+                  <form className="add-exp-form" onSubmit={handleSaveEdit}>
+                    <div className="add-exp-fields">
+                      <div className="form-group">
+                        <label>Name *</label>
+                        <input
+                          value={editForm.name}
+                          onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                          placeholder="e.g. Switched to CV v2"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>From</label>
+                        <input
+                          type="date"
+                          value={editForm.start_date}
+                          onChange={e => setEditForm(p => ({ ...p, start_date: e.target.value }))}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>To</label>
+                        <input
+                          type="date"
+                          value={editForm.end_date}
+                          onChange={e => setEditForm(p => ({ ...p, end_date: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Notes</label>
+                      <textarea
+                        rows={2}
+                        value={editForm.notes}
+                        onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
+                        placeholder="What changed?"
+                      />
+                    </div>
+                    {editError && <p className="error-msg">{editError}</p>}
+                    <div className="add-exp-btns">
+                      <button type="submit" className="btn-primary" style={{ width: 'auto' }}>Save changes</button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => { setEditingExp(null); setEditError('') }}
+                      >Cancel</button>
+                    </div>
+                  </form>
+                ) : !showAddExp ? (
                   <button className="btn-add-exp" onClick={() => setShowAddExp(true)}>+ Add entry</button>
                 ) : (
                   <form className="add-exp-form" onSubmit={handleAddExp}>

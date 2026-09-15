@@ -536,8 +536,22 @@
   gap: var(--space-4);
 }
 
+/* Source + salary min + salary max row.
+   calc() keeps Source exactly the same width as Company (form-row left column)
+   and the salary pair exactly the same total width as Job title (form-row right column). */
+.form-row-salaries {
+  display: grid;
+  grid-template-columns:
+    calc((100% - var(--space-4)) / 2)
+    calc((100% - 3 * var(--space-4)) / 4)
+    calc((100% - 3 * var(--space-4)) / 4);
+  gap: var(--space-4);
+}
+
 @media (max-width: 480px) {
   .form-row { grid-template-columns: 1fr; }
+  .form-row-salaries { grid-template-columns: 1fr 1fr; }
+  .form-row-salaries > :first-child { grid-column: span 2; }
 }
 
 /* Form bottom action row */
@@ -731,7 +745,8 @@
   transition: var(--transition-fast);
 }
 
-.btn-set-period:hover {
+.btn-set-period:hover,
+.btn-set-period.selected {
   background: var(--color-accent);
   color: var(--color-accent-text);
 }

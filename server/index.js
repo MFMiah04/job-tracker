@@ -6,6 +6,7 @@ const pool = require('./db');
 
 const authRoutes = require('./routes/auth');
 const jobRoutes = require('./routes/jobs');
+const { recalculateJobStatus } = jobRoutes;
 const experimentRoutes = require('./routes/experiments');
 
 const app = express();
@@ -53,6 +54,23 @@ async function start() {
     )
   `);
   await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS furthest_status TEXT`);
+
+  // Backfill: create a Wishlist event for any job with no event history
+  await pool.query(`
+    INSERT INTO job_status_events (job_id, status, created_at)
+    SELECT j.id, 'Wishlist', j.created_at
+    FROM jobs j
+    LEFT JOIN job_status_events e ON e.job_id = j.id
+    WHERE e.id IS NULL
+  `);
+
+  // Recalculate status + furthest_status for every job from its event history
+  const { rows: allJobs } = await pool.query('SELECT id FROM jobs');
+  for (const { id } of allJobs) {
+    await recalculateJobStatus(id);
+  }
+  console.log(`Recalculated status for ${allJobs.length} jobs`);
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

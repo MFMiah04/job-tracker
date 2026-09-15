@@ -36,6 +36,29 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// PUT /api/experiments/:id
+router.put('/:id', async (req, res, next) => {
+  try {
+    const { name, start_date, end_date, notes } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    const result = await pool.query(
+      `UPDATE experiments
+       SET name=$1, start_date=$2, end_date=$3, notes=$4
+       WHERE id=$5 AND user_id=$6
+       RETURNING *`,
+      [name.trim(), start_date || null, end_date || null, notes?.trim() || null, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Experiment not found' });
+    }
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/experiments/:id
 router.delete('/:id', async (req, res, next) => {
   try {
