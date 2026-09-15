@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
+const PIPELINE_RANK = { Wishlist: 0, Applied: 1, OA: 2, Interview: 3, Offer: 4, Rejected: 5 }
 
 const EMPTY_FORM = {
   company: '',
@@ -102,7 +103,6 @@ export default function JobForm() {
     })
     if (res.ok) {
       const data = await res.json()
-      const PIPELINE_RANK = { Wishlist: 0, Applied: 1, OA: 2, Interview: 3, Offer: 4, Rejected: 5 }
       setEvents(prev => [...prev, data].sort((a, b) => {
         const rankDiff = (PIPELINE_RANK[a.status] ?? 0) - (PIPELINE_RANK[b.status] ?? 0)
         if (rankDiff !== 0) return rankDiff

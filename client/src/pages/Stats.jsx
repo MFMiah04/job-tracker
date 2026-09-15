@@ -236,7 +236,7 @@ export default function Stats() {
     })
     const data = await res.json()
     if (!res.ok) { setEditError(data.error || 'Failed to save'); return }
-    setExperiments(prev => prev.map(e => e.id === editingExp.id ? data : e))
+    setExperiments(prev => prev.map(exp => exp.id === editingExp.id ? data : exp))
     setEditingExp(null)
   }
 
