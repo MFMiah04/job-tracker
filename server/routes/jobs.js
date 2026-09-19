@@ -7,31 +7,29 @@ const router = express.Router();
 // Protect all routes in this file — verifyToken runs before every handler below
 router.use(verifyToken);
 
-const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected'];
-// Statuses that can become furthest_status (Rejected and Wishlist excluded)
-const PIPELINE = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer'];
+const VALID_STATUSES = ['Applied', 'OA', 'Interview', 'Offer', 'Accepted', 'Rejected', 'Withdrawn'];
+const PIPELINE = ['Applied', 'OA', 'Interview', 'Offer', 'Accepted'];
+
+const statusOrderSQL = (col = 'status') =>
+  `CASE ${col} WHEN 'Applied' THEN 0 WHEN 'OA' THEN 1 WHEN 'Interview' THEN 2
+               WHEN 'Offer' THEN 3 WHEN 'Accepted' THEN 4
+               WHEN 'Rejected' THEN 5 WHEN 'Withdrawn' THEN 6 ELSE 99 END`
 
 async function recalculateJobStatus(jobId) {
   const events = await pool.query(
     `SELECT status, created_at FROM job_status_events WHERE job_id = $1
      ORDER BY
        created_at::date DESC,
-       CASE status WHEN 'Wishlist' THEN 0 WHEN 'Applied' THEN 1 WHEN 'OA' THEN 2
-                   WHEN 'Interview' THEN 3 WHEN 'Offer' THEN 4 WHEN 'Rejected' THEN 5
-                   ELSE 0 END DESC,
+       ${statusOrderSQL()} DESC,
        created_at DESC`,
     [jobId]
   );
-  // If there are any non-Wishlist events, use the most recent of those as current
-  // status — this prevents a backdated Applied event from being "beaten" by the
-  // auto-created Wishlist event which carries the tracker-entry timestamp.
-  const nonWishlist = events.rows.filter(ev => ev.status !== 'Wishlist');
-  const latestStatus = nonWishlist.length > 0 ? nonWishlist[0].status : 'Wishlist';
+  const latestStatus = events.rows[0]?.status || 'Applied';
 
   let furthestStatus = null;
   for (const ev of events.rows) {
-    if (ev.status !== 'Rejected' && ev.status !== 'Wishlist') {
-      if (PIPELINE.indexOf(ev.status) > PIPELINE.indexOf(furthestStatus || 'Wishlist')) {
+    if (ev.status !== 'Rejected' && ev.status !== 'Withdrawn') {
+      if (PIPELINE.indexOf(ev.status) > PIPELINE.indexOf(furthestStatus ?? '')) {
         furthestStatus = ev.status;
       }
     }
@@ -72,7 +70,7 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Company and job title are required' });
     }
 
-    const jobStatus = status || 'Wishlist';
+    const jobStatus = status || 'Applied';
     if (!VALID_STATUSES.includes(jobStatus)) {
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
     }
@@ -152,15 +150,13 @@ router.get('/:id/events', async (req, res, next) => {
   try {
     // Verify the job belongs to the user before returning events
     const result = await pool.query(
-      `SELECT e.id, e.status, e.created_at
+      `SELECT e.id, e.status, e.notes, e.created_at
        FROM job_status_events e
        JOIN jobs j ON j.id = e.job_id
        WHERE e.job_id = $1 AND j.user_id = $2
        ORDER BY
-         CASE e.status WHEN 'Wishlist' THEN 0 WHEN 'Applied' THEN 1 WHEN 'OA' THEN 2
-                       WHEN 'Interview' THEN 3 WHEN 'Offer' THEN 4 WHEN 'Rejected' THEN 5
-                       ELSE 0 END ASC,
          e.created_at::date ASC,
+         ${statusOrderSQL('e.status')} ASC,
          e.created_at ASC`,
       [req.params.id, req.user.id]
     );
@@ -173,7 +169,7 @@ router.get('/:id/events', async (req, res, next) => {
 // POST /api/jobs/:id/events — manually add a history event
 router.post('/:id/events', async (req, res, next) => {
   try {
-    const { status, created_at } = req.body;
+    const { status, created_at, notes } = req.body;
     if (!status || !VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
     }
@@ -182,9 +178,9 @@ router.post('/:id/events', async (req, res, next) => {
     if (job.rows.length === 0) return res.status(404).json({ error: 'Job not found' });
 
     const result = await pool.query(
-      `INSERT INTO job_status_events (job_id, status, created_at)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [req.params.id, status, created_at || new Date()]
+      `INSERT INTO job_status_events (job_id, status, created_at, notes)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [req.params.id, status, created_at || new Date(), notes || null]
     );
     await recalculateJobStatus(req.params.id);
     res.status(201).json(result.rows[0]);
@@ -193,21 +189,24 @@ router.post('/:id/events', async (req, res, next) => {
   }
 });
 
-// PUT /api/jobs/:id/events/:eventId — update an event's status or date
+// PUT /api/jobs/:id/events/:eventId — update an event's status, date, or notes
 router.put('/:id/events/:eventId', async (req, res, next) => {
   try {
-    const { status, created_at } = req.body;
+    const { status, created_at, notes } = req.body;
     if (status && !VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
     }
+    // $3 flags whether caller explicitly sent a notes field (so clearing '' works correctly)
+    const notesProvided = 'notes' in req.body;
     const result = await pool.query(
       `UPDATE job_status_events e
        SET status = COALESCE($1, e.status),
-           created_at = COALESCE($2, e.created_at)
+           created_at = COALESCE($2, e.created_at),
+           notes = CASE WHEN $3 THEN $4 ELSE e.notes END
        FROM jobs j
-       WHERE e.id = $3 AND e.job_id = j.id AND j.user_id = $4
+       WHERE e.id = $5 AND e.job_id = j.id AND j.user_id = $6
        RETURNING e.*`,
-      [status || null, created_at || null, req.params.eventId, req.user.id]
+      [status || null, created_at || null, notesProvided, notes || null, req.params.eventId, req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
     await recalculateJobStatus(req.params.id);

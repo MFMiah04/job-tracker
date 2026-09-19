@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const jobRoutes = require('./routes/jobs');
 const { recalculateJobStatus } = jobRoutes;
 const experimentRoutes = require('./routes/experiments');
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/experiments', experimentRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Global error handler — must have exactly 4 params so Express recognises it as an error handler
 // Must be registered after all routes or it won't catch their errors
@@ -54,11 +56,12 @@ async function start() {
     )
   `);
   await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS furthest_status TEXT`);
+  await pool.query(`ALTER TABLE job_status_events ADD COLUMN IF NOT EXISTS notes TEXT`);
 
-  // Backfill: create a Wishlist event for any job with no event history
+  // Backfill: create an Applied event for any job with no event history
   await pool.query(`
     INSERT INTO job_status_events (job_id, status, created_at)
-    SELECT j.id, 'Wishlist', j.created_at
+    SELECT j.id, 'Applied', j.created_at
     FROM jobs j
     LEFT JOIN job_status_events e ON e.job_id = j.id
     WHERE e.id IS NULL

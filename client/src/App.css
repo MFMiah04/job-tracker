@@ -365,7 +365,35 @@
 }
 
 .event-row-edit {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.event-row-top {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
+}
+
+.event-notes-input {
+  width: 100%;
+  margin-top: var(--space-1);
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid hsl(38, 8%, 28%);
+  color: hsl(38, 15%, 65%);
+  padding: 2px 0;
+  font-family: var(--font-sans);
+}
+
+.event-notes-input:focus {
+  outline: none;
+  border-bottom-color: var(--color-accent);
+}
+
+.event-notes-input::placeholder {
+  color: hsl(38, 8%, 42%);
 }
 
 .event-status-select {
@@ -412,8 +440,8 @@
 
 .add-event-form {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 0;
   margin-top: var(--space-2);
 }
 
@@ -475,12 +503,13 @@
   font-weight: var(--weight-medium);
 }
 
-.status-wishlist  { background: hsl(38,  15%, 18%); color: hsl(38,  30%, 65%); }
 .status-applied   { background: hsl(215, 30%, 20%); color: hsl(215, 75%, 72%); }
 .status-oa        { background: hsl(38,  30%, 20%); color: hsl(38,  75%, 72%); }
 .status-interview { background: hsl(270, 28%, 24%); color: hsl(270, 65%, 78%); }
 .status-offer     { background: hsl(150, 28%, 18%); color: hsl(150, 55%, 62%); }
+.status-accepted  { background: hsl(150, 35%, 16%); color: hsl(150, 65%, 58%); }
 .status-rejected  { background: hsl(0,   28%, 22%); color: hsl(0,   65%, 68%); }
+.status-withdrawn { background: hsl(38,  25%, 20%); color: hsl(38,  65%, 70%); }
 
 /* ----------------------------------------------------------
    EMPTY STATE

@@ -62,7 +62,7 @@ CREATE TABLE jobs (
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   company TEXT NOT NULL,
   role TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'Wishlist',
+  status TEXT NOT NULL DEFAULT 'Applied',
   location TEXT,
   salary TEXT,
   applied_at DATE,

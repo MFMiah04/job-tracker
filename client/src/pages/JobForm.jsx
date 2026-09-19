@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
-const STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
-const PIPELINE_RANK = { Wishlist: 0, Applied: 1, OA: 2, Interview: 3, Offer: 4, Rejected: 5 }
+import { STATUSES, PIPELINE_RANK } from '../constants'
 
 const EMPTY_FORM = {
   company: '',
@@ -21,13 +19,16 @@ export default function JobForm() {
   const { token } = useAuth()
   const navigate = useNavigate()
 
+  const authJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const authOnly = { Authorization: `Bearer ${token}` }
+
   const [form, setForm] = useState(EMPTY_FORM)
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
   const [error, setError] = useState('')
   const [events, setEvents] = useState([])
   const [showAddEvent, setShowAddEvent] = useState(false)
-  const [newEvent, setNewEvent] = useState({ status: 'Applied', created_at: '' })
+  const [newEvent, setNewEvent] = useState({ status: 'Applied', created_at: '', notes: '' })
 
   // In edit mode, fetch the existing job and pre-populate the form
   useEffect(() => {
@@ -36,8 +37,8 @@ export default function JobForm() {
     async function fetchJob() {
       try {
         const [jobRes, eventsRes] = await Promise.all([
-          fetch(`/api/jobs/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`/api/jobs/${id}/events`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/jobs/${id}`, { headers: authOnly }),
+          fetch(`/api/jobs/${id}/events`, { headers: authOnly }),
         ])
         const data = await jobRes.json()
         if (!jobRes.ok) {
@@ -72,24 +73,34 @@ export default function JobForm() {
     if (!newDate) return
     await fetch(`/api/jobs/${id}/events/${eventId}`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: authJson,
       body: JSON.stringify({ created_at: newDate }),
     })
   }
 
-  async function handleEventStatusChange(ev, newStatus) {
-    setEvents(prev => prev.map(e => e.id === ev.id ? { ...e, status: newStatus } : e))
-    await fetch(`/api/jobs/${id}/events/${ev.id}`, {
+  async function handleEventNotesBlur(eventId, notes) {
+    await fetch(`/api/jobs/${id}/events/${eventId}`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: authJson,
+      body: JSON.stringify({ notes }),
+    })
+  }
+
+  async function handleEventStatusChange(ev, newStatus) {
+    const res = await fetch(`/api/jobs/${id}/events/${ev.id}`, {
+      method: 'PUT',
+      headers: authJson,
       body: JSON.stringify({ status: newStatus }),
     })
+    if (res.ok) {
+      setEvents(prev => prev.map(e => e.id === ev.id ? { ...e, status: newStatus } : e))
+    }
   }
 
   async function handleDeleteEvent(eventId) {
     const res = await fetch(`/api/jobs/${id}/events/${eventId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authOnly,
     })
     if (res.ok) setEvents(prev => prev.filter(e => e.id !== eventId))
   }
@@ -98,7 +109,7 @@ export default function JobForm() {
     if (!newEvent.created_at) return
     const res = await fetch(`/api/jobs/${id}/events`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: authJson,
       body: JSON.stringify(newEvent),
     })
     if (res.ok) {
@@ -109,7 +120,7 @@ export default function JobForm() {
         const da = a.created_at.slice(0, 10), db = b.created_at.slice(0, 10)
         return da < db ? -1 : da > db ? 1 : 0
       }))
-      setNewEvent({ status: 'Applied', created_at: '' })
+      setNewEvent({ status: 'Applied', created_at: '', notes: '' })
       setShowAddEvent(false)
     }
   }
@@ -125,10 +136,7 @@ export default function JobForm() {
     try {
       const res = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: authJson,
         // Convert empty strings to null so the DB gets NULL, not an empty string
         body: JSON.stringify({
           ...form,
@@ -248,47 +256,66 @@ export default function JobForm() {
               <ul className="event-list">
                 {events.map((ev) => (
                   <li key={ev.id} className="event-row event-row-edit">
-                    <select
-                      className={`event-status-select status-${ev.status.toLowerCase().replace(' ', '-')}`}
-                      value={ev.status}
-                      onChange={e => handleEventStatusChange(ev, e.target.value)}
-                    >
-                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <div className="event-row-top">
+                      <select
+                        className={`event-status-select status-${ev.status.toLowerCase().replace(' ', '-')}`}
+                        value={ev.status}
+                        onChange={e => handleEventStatusChange(ev, e.target.value)}
+                      >
+                        {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input
+                        type="date"
+                        className="event-date-input"
+                        value={ev.created_at ? ev.created_at.slice(0, 10) : ''}
+                        onChange={e => setEvents(prev => prev.map(x => x.id === ev.id ? { ...x, created_at: e.target.value } : x))}
+                        onBlur={e => handleEventDateBlur(ev.id, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn-delete-event"
+                        onClick={() => handleDeleteEvent(ev.id)}
+                        aria-label="Remove event"
+                      >✕</button>
+                    </div>
                     <input
-                      type="date"
-                      className="event-date-input"
-                      value={ev.created_at ? ev.created_at.slice(0, 10) : ''}
-                      onChange={e => setEvents(prev => prev.map(x => x.id === ev.id ? { ...x, created_at: e.target.value } : x))}
-                      onBlur={e => handleEventDateBlur(ev.id, e.target.value)}
+                      type="text"
+                      className="event-notes-input"
+                      placeholder="Notes (optional)"
+                      value={ev.notes || ''}
+                      onChange={e => setEvents(prev => prev.map(x => x.id === ev.id ? { ...x, notes: e.target.value } : x))}
+                      onBlur={e => handleEventNotesBlur(ev.id, e.target.value)}
                     />
-                    <button
-                      type="button"
-                      className="btn-delete-event"
-                      onClick={() => handleDeleteEvent(ev.id)}
-                      aria-label="Remove event"
-                    >✕</button>
                   </li>
                 ))}
               </ul>
 
               {showAddEvent ? (
                 <div className="add-event-form">
-                  <select
-                    className={`event-status-select status-${newEvent.status.toLowerCase().replace(' ', '-')}`}
-                    value={newEvent.status}
-                    onChange={e => setNewEvent(p => ({ ...p, status: e.target.value }))}
-                  >
-                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <div className="event-row-top">
+                    <select
+                      className={`event-status-select status-${newEvent.status.toLowerCase().replace(' ', '-')}`}
+                      value={newEvent.status}
+                      onChange={e => setNewEvent(p => ({ ...p, status: e.target.value }))}
+                    >
+                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <input
+                      type="date"
+                      className="event-date-input"
+                      value={newEvent.created_at}
+                      onChange={e => setNewEvent(p => ({ ...p, created_at: e.target.value }))}
+                    />
+                    <button type="button" className="btn-add-event-confirm" onClick={handleAddEvent}>Add</button>
+                    <button type="button" className="btn-delete-event" onClick={() => setShowAddEvent(false)}>✕</button>
+                  </div>
                   <input
-                    type="date"
-                    className="event-date-input"
-                    value={newEvent.created_at}
-                    onChange={e => setNewEvent(p => ({ ...p, created_at: e.target.value }))}
+                    type="text"
+                    className="event-notes-input"
+                    placeholder="Notes (optional)"
+                    value={newEvent.notes}
+                    onChange={e => setNewEvent(p => ({ ...p, notes: e.target.value }))}
                   />
-                  <button type="button" className="btn-add-event-confirm" onClick={handleAddEvent}>Add</button>
-                  <button type="button" className="btn-delete-event" onClick={() => setShowAddEvent(false)}>✕</button>
                 </div>
               ) : (
                 <button type="button" className="btn-add-exp" onClick={() => setShowAddEvent(true)}>

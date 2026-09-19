@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
-const VALID_STATUSES = ['Wishlist', 'Applied', 'OA', 'Interview', 'Offer', 'Rejected']
+import { STATUSES } from '../constants'
 
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000)
@@ -63,8 +62,8 @@ export default function Dashboard() {
 
   async function handleStatusChange(e, job, direction) {
     e.stopPropagation()
-    const currentIndex = VALID_STATUSES.indexOf(job.status)
-    const newStatus = VALID_STATUSES[(currentIndex + direction + VALID_STATUSES.length) % VALID_STATUSES.length]
+    const currentIndex = STATUSES.indexOf(job.status)
+    const newStatus = STATUSES[(currentIndex + direction + STATUSES.length) % STATUSES.length]
 
     // Optimistic update
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j))

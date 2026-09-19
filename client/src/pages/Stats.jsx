@@ -3,22 +3,240 @@ import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   ResponsiveContainer,
-  FunnelChart, Funnel, LabelList, Cell, Tooltip,
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 
-// Stages shown in funnel — in pipeline order
-const FUNNEL_STAGES = ['Applied', 'OA', 'Interview', 'Offer']
-
-// Match the text/foreground colours from the status badges in App.css
-const FUNNEL_COLORS = [
-  'hsl(215, 60%, 55%)',  // Applied — blue
-  'hsl(38,  60%, 55%)',  // OA — amber
-  'hsl(270, 50%, 60%)',  // Interview — purple
-  'hsl(150, 45%, 50%)',  // Offer — green
-]
-
 const PERIODS = ['all', 'week', 'month', 'year']
+
+// Colour map for Sankey nodes
+const SANKEY_COLORS = {
+  Applied:   'hsl(215, 60%, 55%)',
+  OA:        'hsl(38,  60%, 55%)',
+  Offer:     'hsl(150, 45%, 50%)',
+  Accepted:  'hsl(150, 65%, 58%)',
+  Rejected:  'hsl(0,   55%, 55%)',
+  Withdrawn: 'hsl(30,  50%, 52%)',
+  Active:    'hsl(185, 40%, 48%)',
+}
+
+function getSankeyColor(id) {
+  if (id.startsWith('Interview')) return 'hsl(270, 50%, 60%)'
+  if (id.startsWith('Rejected'))  return SANKEY_COLORS.Rejected
+  if (id.startsWith('Withdrawn')) return SANKEY_COLORS.Withdrawn
+  return SANKEY_COLORS[id] || 'hsl(38, 20%, 45%)'
+}
+
+function SankeyChart({ data }) {
+  if (!data || data.nodes.length === 0) return <p className="status-msg">No data yet.</p>
+
+  const W = 560, H = 230
+  const NODE_W = 4
+  const PIPE_Y = 55
+  const TERM_Y = 145
+  const WITHDRAW_Y = 180
+  const MAX_BAR_H = 100
+  const OA_Y = PIPE_Y + 45   // OA sits below the main pipeline row
+
+  const inflow = {}, outflow = {}
+  for (const l of data.links) {
+    outflow[l.source] = (outflow[l.source] || 0) + l.value
+    inflow[l.target]  = (inflow[l.target]  || 0) + l.value
+  }
+  const origCount = Object.fromEntries(
+    data.nodes.map(n => [n.id, Math.max(outflow[n.id] || 0, inflow[n.id] || 0)])
+  )
+
+  const maxCount = Math.max(...Object.values(origCount).filter(v => v > 0), 1)
+  const nodeH = id => Math.max(3, (origCount[id] || 0) / maxCount * MAX_BAR_H)
+
+  const interviewStages = data.nodes
+    .map(n => n.id)
+    .filter(id => /^Interview \d+$/.test(id))
+    .sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]))
+
+  const pipelineIds = ['Applied', 'OA', ...interviewStages, 'Offer', 'Accepted']
+    .filter(id => data.nodes.some(n => n.id === id))
+
+  const span = W - 220   // extra right margin keeps last node at ~61% of width
+  const colW = pipelineIds.length > 1 ? span / (pipelineIds.length - 1) : 0
+  const pipeX = Object.fromEntries(pipelineIds.map((id, i) => [id, 40 + i * colW]))
+
+  const TERM_X_OFFSET = colW > 0 ? colW * 0.3 : 40
+  const termX = {}      // Rejected nodes → TERM_Y
+  const withdrawX = {}  // Withdrawn nodes → WITHDRAW_Y
+
+  for (const { id } of data.nodes) {
+    const isRej = id.startsWith('Rejected')
+    const isWth = id.startsWith('Withdrawn')
+    if (!isRej && !isWth) continue
+    const m = id.match(/\((.+)\)$/)
+    if (!m) continue
+    const stage = m[1]
+    const srcId = stage === 'Interview'
+      ? (interviewStages[interviewStages.length - 1] ?? 'Applied')
+      : stage
+    const x = Math.min((pipeX[srcId] ?? (W / 2)) + TERM_X_OFFSET, W - 30)
+    if (isRej) termX[id] = x
+    else withdrawX[id] = x
+  }
+
+  function pos(id) {
+    if (id === 'OA')         return [pipeX['OA'],    OA_Y]
+    if (id in pipeX)         return [pipeX[id],      PIPE_Y]
+    if (id in termX)         return [termX[id],       TERM_Y]
+    if (id in withdrawX)     return [withdrawX[id],   WITHDRAW_Y]
+    return null
+  }
+
+  // Center-line bezier — stroke is always perpendicular to path so apparent thickness is constant
+  function cBezier(sx, sCY, tx, tCY) {
+    const mx = (sx + tx) / 2
+    return `M${sx} ${sCY} C${mx} ${sCY},${mx} ${tCY},${tx} ${tCY}`
+  }
+
+  // Sort key for outgoing links: Active at top, pipeline by rank desc, Rejected/Withdrawn at bottom
+  const srcSortKey = target => {
+    if (target === 'Active') return 10000
+    if (target.startsWith('Withdrawn')) return -2
+    if (target.startsWith('Rejected'))  return -1
+    return pipelineIds.indexOf(target)  // OA=1, Interview1=2, Interview2=3…
+  }
+
+  const srcBands = {}
+  const tgtBands = {}
+
+  const bySource = {}
+  for (const l of data.links) {
+    ;(bySource[l.source] = bySource[l.source] || []).push(l)
+  }
+  for (const [srcId, links] of Object.entries(bySource)) {
+    const p = pos(srcId); if (!p) continue
+    const h = nodeH(srcId)
+    links.sort((a, b) => srcSortKey(b.target) - srcSortKey(a.target))
+    let y = p[1] - h / 2
+    for (const l of links) {
+      const bh = (l.value / (outflow[srcId] || 1)) * h
+      srcBands[`${l.source}::${l.target}`] = { y0: y, y1: y + bh }
+      y += bh
+    }
+  }
+
+  const byTarget = {}
+  for (const l of data.links) {
+    ;(byTarget[l.target] = byTarget[l.target] || []).push(l)
+  }
+  for (const [tgtId, links] of Object.entries(byTarget)) {
+    if (tgtId === 'Active') continue
+    const p = pos(tgtId); if (!p) continue
+    const h = nodeH(tgtId)
+    links.sort((a, b) => {
+      const pa = pos(a.source), pb = pos(b.source)
+      if (!pa || !pb) return 0
+      return pa[0] - pb[0]
+    })
+    let y = p[1] - h / 2
+    for (const l of links) {
+      const bh = (l.value / (inflow[tgtId] || 1)) * h
+      tgtBands[`${l.source}::${l.target}`] = { y0: y, y1: y + bh }
+      y += bh
+    }
+  }
+
+  const activeLinks = data.links.filter(l => l.target === 'Active')
+
+  return (
+    <div style={{ overflowX: 'hidden' }}>
+    <svg viewBox={`0 -25 ${W} ${H}`} style={{ width: '100%', overflow: 'visible' }}>
+      <defs>
+        {activeLinks.map((link, i) => {
+          const p = pos(link.source)
+          if (!p) return null
+          const [sx] = p
+          const endX = Math.min(sx + 90, W - 10)
+          return (
+            <linearGradient key={i} id={`ag-${i}`}
+              x1={sx} y1={0} x2={endX} y2={0}
+              gradientUnits="userSpaceOnUse">
+              <stop offset="0%"   stopColor={getSankeyColor(link.source)} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={getSankeyColor(link.source)} stopOpacity={0} />
+            </linearGradient>
+          )
+        })}
+      </defs>
+
+      {/* Pipeline and rejection links — stroked center-line bezier (constant perpendicular thickness) */}
+      {data.links.filter(l => l.target !== 'Active').map((link, i) => {
+        const s = pos(link.source), t = pos(link.target)
+        if (!s || !t) return null
+        const key = `${link.source}::${link.target}`
+        const sb = srcBands[key], tb = tgtBands[key]
+        if (!sb || !tb) return null
+        const [sx] = s, [tx] = t
+        const sCY = (sb.y0 + sb.y1) / 2
+        const tCY = (tb.y0 + tb.y1) / 2
+        const sw = sb.y1 - sb.y0
+        const opacity = link.target.startsWith('Withdrawn') ? 0.35 : 0.45
+        return (
+          <path key={i}
+            d={cBezier(sx, sCY, tx, tCY)}
+            fill="none"
+            stroke={getSankeyColor(link.target)}
+            strokeWidth={sw}
+            strokeOpacity={opacity} />
+        )
+      })}
+
+      {/* Active fade-out bands — stroked center-line, gradient stroke, arcs upward */}
+      {activeLinks.map((link, i) => {
+        const p = pos(link.source); if (!p) return null
+        const key = `${link.source}::Active`
+        const sb = srcBands[key]; if (!sb) return null
+        const [sx, srcY] = p
+        const endX = Math.min(sx + 90, W - 10)
+        const sCY = (sb.y0 + sb.y1) / 2
+        const sw = sb.y1 - sb.y0
+        const endCY = srcY - 30
+        return (
+          <path key={i}
+            d={cBezier(sx, sCY, endX, endCY)}
+            fill="none"
+            stroke={`url(#ag-${i})`}
+            strokeWidth={sw} />
+        )
+      })}
+
+      {/* Node bars and labels */}
+      {data.nodes.map((node, i) => {
+        if (node.id === 'Active') return null
+        const p = pos(node.id)
+        if (!p) return null
+        const [cx, cy] = p
+        const labelAbove = (node.id in pipeX) && node.id !== 'OA'
+        const h = nodeH(node.id)
+        return (
+          <g key={i}>
+            <rect
+              x={cx - NODE_W / 2} y={cy - h / 2}
+              width={NODE_W} height={h}
+              fill={getSankeyColor(node.id)} rx={2}
+            />
+            <text
+              x={cx}
+              y={labelAbove ? cy - h / 2 - 6 : cy + h / 2 + 6}
+              textAnchor={!labelAbove && cx > W / 2 ? 'end' : 'middle'}
+              dominantBaseline={labelAbove ? 'auto' : 'hanging'}
+              fill="hsl(38, 20%, 85%)"
+              fontSize={10}
+            >
+              {node.id} ({origCount[node.id]})
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+    </div>
+  )
+}
 
 // Returns the Monday of the week that contains dateStr
 function weekStart(dateStr) {
@@ -26,7 +244,7 @@ function weekStart(dateStr) {
   const day = d.getDay()
   const diff = d.getDate() - day + (day === 0 ? -6 : 1)
   d.setDate(diff)
-  return d.toISOString().slice(0, 10)
+  return localDateStr(d)
 }
 
 // Groups jobs by week and fills in any gaps (weeks with 0 applications)
@@ -42,17 +260,15 @@ function buildWeeklyData(jobs) {
 
   const weeks = Object.keys(counts).sort()
 
-  // Single week — return it directly, no gap-filling needed
   if (weeks.length === 1) {
     return [{ label: new Date(weeks[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), count: counts[weeks[0]] }]
   }
 
-  // Walk from first to last week, inserting 0s for missing weeks
   const result = []
   const current = new Date(weeks[0])
   const end = new Date(weeks[weeks.length - 1])
   while (current <= end) {
-    const key = current.toISOString().slice(0, 10)
+    const key = localDateStr(current)
     result.push({
       label: new Date(key).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       count: counts[key] || 0,
@@ -66,7 +282,7 @@ function buildDailyData(jobs, days) {
   const counts = {}
   for (const job of jobs) {
     if (!job.applied_at) continue
-    const key = new Date(job.applied_at).toISOString().slice(0, 10)
+    const key = localDateStr(new Date(job.applied_at))
     counts[key] = (counts[key] || 0) + 1
   }
   const result = []
@@ -74,7 +290,7 @@ function buildDailyData(jobs, days) {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today)
     d.setDate(today.getDate() - i)
-    const key = d.toISOString().slice(0, 10)
+    const key = localDateStr(d)
     result.push({
       label: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       count: counts[key] || 0,
@@ -92,6 +308,20 @@ function filterByPeriod(jobs, period) {
   return jobs.filter(j => j.applied_at && new Date(j.applied_at) >= cutoff)
 }
 
+// Returns the ISO date string for the start of the period (null = all time)
+function periodCutoff(period) {
+  if (period === 'all') return null
+  const d = new Date()
+  if (period === 'week')  d.setDate(d.getDate() - 7)
+  if (period === 'month') d.setMonth(d.getMonth() - 1)
+  if (period === 'year')  d.setFullYear(d.getFullYear() - 1)
+  return localDateStr(d)
+}
+
+// furthest_status rank — same order as server PIPELINE
+const FS_RANK = { Applied: 0, OA: 1, Interview: 2, Offer: 3, Accepted: 4 }
+const fsRank = j => FS_RANK[j.furthest_status] ?? -1
+
 function computeRangeStats(jobs, from, to) {
   const start = from ? new Date(from) : null
   const end   = to   ? new Date(to + 'T23:59:59') : new Date()
@@ -102,12 +332,13 @@ function computeRangeStats(jobs, from, to) {
     if (d > end) return false
     return true
   })
-  const submitted = inRange.filter(j => j.status !== 'Wishlist')
+  const submitted = inRange
   const n = submitted.length
-  const responded  = submitted.filter(j => ['OA', 'Interview', 'Offer', 'Rejected'].includes(j.status)).length
-  const oa         = submitted.filter(j => ['OA', 'Interview', 'Offer'].includes(j.status)).length
-  const interview  = submitted.filter(j => ['Interview', 'Offer'].includes(j.status)).length
-  const offers     = submitted.filter(j => j.status === 'Offer').length
+  // responded = company sent any reply (reached OA+ OR was directly rejected)
+  const responded = submitted.filter(j => j.status === 'Rejected' || fsRank(j) >= FS_RANK.OA).length
+  const oa        = submitted.filter(j => fsRank(j) >= FS_RANK.OA).length
+  const interview = submitted.filter(j => fsRank(j) >= FS_RANK.Interview).length
+  const offers    = submitted.filter(j => fsRank(j) >= FS_RANK.Offer).length
   const pct = (num) => n === 0 ? null : Math.round((num / n) * 100)
   return { applied: n, responseRate: pct(responded), oaRate: pct(oa), interviewRate: pct(interview), offers }
 }
@@ -115,6 +346,10 @@ function computeRangeStats(jobs, from, to) {
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function Delta({ a, b }) {
@@ -149,7 +384,10 @@ export default function Stats() {
   const [jobs, setJobs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
-  const [period, setPeriod]   = useState('all')
+  const [period, setPeriod]   = useState('week')
+
+  const [sankeyData, setSankeyData] = useState(null)
+  const [sankeyLoading, setSankeyLoading] = useState(true)
 
   // Change log
   const [experiments, setExperiments] = useState([])
@@ -183,6 +421,26 @@ export default function Stats() {
     }
     fetchJobs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    async function fetchSankey() {
+      setSankeyLoading(true)
+      const from = periodCutoff(period)
+      const params = from ? `?from=${from}` : ''
+      try {
+        const res = await fetch(`/api/stats/sankey${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) setSankeyData(await res.json())
+        else console.error('Sankey fetch failed:', res.status, await res.text())
+      } catch (err) {
+        console.error('Sankey fetch error:', err)
+      } finally {
+        setSankeyLoading(false)
+      }
+    }
+    fetchSankey()
+  }, [period]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function fetchExperiments() {
@@ -245,7 +503,7 @@ export default function Stats() {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (res.ok) setExperiments(prev => prev.filter(e => e.id !== id))
+    if (res.ok) setExperiments(prev => prev.filter(exp => exp.id !== id))
   }
 
   // --- computed stats ---
@@ -256,30 +514,12 @@ export default function Stats() {
     return acc
   }, {})
 
-  const submitted    = filteredJobs.filter(j => j.status !== 'Wishlist')
-  const active       = filteredJobs.filter(j => ['Applied', 'OA', 'Interview'].includes(j.status))
-  const responded    = submitted.filter(j => ['OA', 'Interview', 'Offer', 'Rejected'].includes(j.status))
+  const submitted = filteredJobs
+  const active    = filteredJobs.filter(j => ['Applied', 'OA', 'Interview'].includes(j.status))
+  const responded = submitted.filter(j => j.status === 'Rejected' || fsRank(j) >= FS_RANK.OA)
   const responseRate = submitted.length
     ? Math.round((responded.length / submitted.length) * 100)
     : 0
-
-  // Cumulative funnel — a job at Interview counts towards Applied, OA, and Interview
-  const PIPELINE_ORDER = ['Applied', 'OA', 'Interview', 'Offer']
-  const funnelData = FUNNEL_STAGES.map(stage => ({
-    name: stage,
-    value: filteredJobs.filter(j => {
-      const furthest = j.furthest_status || (j.status !== 'Rejected' ? j.status : null)
-      if (!furthest) return false
-      return PIPELINE_ORDER.indexOf(furthest) >= PIPELINE_ORDER.indexOf(stage)
-    }).length,
-  }))
-
-  // Rejection breakdown by furthest stage reached
-  const rejectedJobs = filteredJobs.filter(j => j.status === 'Rejected')
-  const rejectionsByStage = PIPELINE_ORDER.map(stage => ({
-    stage,
-    count: rejectedJobs.filter(j => (j.furthest_status || 'Applied') === stage).length,
-  })).filter(r => r.count > 0)
 
   const isDaily = period === 'week' || period === 'month'
   const chartData = isDaily
@@ -346,38 +586,18 @@ export default function Stats() {
               <p className="stat-label">Response rate</p>
             </div>
             <div className="stat-card">
-              <p className="stat-value">{byStatus['Offer'] || 0}</p>
+              <p className="stat-value">{(byStatus['Offer'] || 0) + (byStatus['Accepted'] || 0)}</p>
               <p className="stat-label">Offers</p>
             </div>
           </div>
 
-          {/* ---- funnel chart ---- */}
+          {/* ---- Sankey flow diagram ---- */}
           <div className="chart-card">
-            <p className="chart-title">Application funnel</p>
-            {submitted.length === 0 ? (
-              <p className="status-msg">No applications yet.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <FunnelChart>
-                  <Tooltip {...TOOLTIP_STYLE} />
-                  <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                    {funnelData.map((entry, i) => (
-                      <Cell key={entry.name} fill={FUNNEL_COLORS[i]} />
-                    ))}
-                    <LabelList
-                      dataKey="name"
-                      position="right"
-                      style={{ fill: 'hsl(38, 20%, 88%)', fontSize: 13, fontWeight: 500 }}
-                    />
-                  </Funnel>
-                </FunnelChart>
-              </ResponsiveContainer>
-            )}
-            {rejectionsByStage.length > 0 && (
-              <p className="rejection-breakdown">
-                Rejections — {rejectionsByStage.map(r => `post-${r.stage} (${r.count})`).join(' · ')}
-              </p>
-            )}
+            <p className="chart-title">Application pipeline</p>
+            {sankeyLoading
+              ? <p className="status-msg">Loading…</p>
+              : <SankeyChart data={sankeyData} />
+            }
           </div>
 
           {/* ---- area chart (daily or weekly depending on period) ---- */}
