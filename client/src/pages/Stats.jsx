@@ -399,6 +399,9 @@ export default function Stats() {
   const [editForm, setEditForm] = useState({ name: '', start_date: '', end_date: '', notes: '' })
   const [editError, setEditError] = useState('')
 
+  const [showPipeline, setShowPipeline] = useState(false)
+  const [showChart, setShowChart]       = useState(true)
+
   // A/B compare
   const [showAB, setShowAB]   = useState(false)
   const [periodA, setPeriodA] = useState({ from: '', to: '' })
@@ -591,57 +594,71 @@ export default function Stats() {
             </div>
           </div>
 
-          {/* ---- Sankey flow diagram ---- */}
-          <div className="chart-card">
-            <p className="chart-title">Application pipeline</p>
-            {sankeyLoading
-              ? <p className="status-msg">Loading…</p>
-              : <SankeyChart data={sankeyData} />
-            }
+          {/* ---- area chart (daily or weekly depending on period) ---- */}
+          <div className="collapsible-section">
+            <button className="collapsible-toggle" onClick={() => setShowChart(v => !v)}>
+              <span>{chartTitle}</span>
+              <span className="collapsible-chevron">{showChart ? '▲' : '▼'}</span>
+            </button>
+            {showChart && (
+              <div className="changelog-body">
+                {chartData.length === 0 ? (
+                  <p className="status-msg">No applications yet.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <AreaChart data={chartData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="hsl(37, 48%, 68%)" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(37, 48%, 68%)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="hsl(38, 4%, 22%)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fill: 'hsl(38, 6%, 58%)', fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fill: 'hsl(38, 6%, 58%)', fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        {...TOOLTIP_STYLE}
+                        formatter={(value) => [value, 'Applications']}
+                        labelFormatter={(label) => isDaily ? label : `Week of ${label}`}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="hsl(37, 48%, 68%)"
+                        fill="url(#areaGrad)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* ---- area chart (daily or weekly depending on period) ---- */}
-          <div className="chart-card">
-            <p className="chart-title">{chartTitle}</p>
-            {chartData.length === 0 ? (
-              <p className="status-msg">No applications yet.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={chartData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="hsl(37, 48%, 68%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(37, 48%, 68%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="hsl(38, 4%, 22%)" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fill: 'hsl(38, 6%, 58%)', fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: 'hsl(38, 6%, 58%)', fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    {...TOOLTIP_STYLE}
-                    formatter={(value) => [value, 'Applications']}
-                    labelFormatter={(label) => isDaily ? label : `Week of ${label}`}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="count"
-                    stroke="hsl(37, 48%, 68%)"
-                    fill="url(#areaGrad)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+          {/* ---- Sankey flow diagram ---- */}
+          <div className="collapsible-section">
+            <button className="collapsible-toggle" onClick={() => setShowPipeline(v => !v)}>
+              <span>Application pipeline</span>
+              <span className="collapsible-chevron">{showPipeline ? '▲' : '▼'}</span>
+            </button>
+            {showPipeline && (
+              <div className="changelog-body">
+                {sankeyLoading
+                  ? <p className="status-msg">Loading…</p>
+                  : <SankeyChart data={sankeyData} />
+                }
+              </div>
             )}
           </div>
 

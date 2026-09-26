@@ -7,6 +7,13 @@ function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000)
 }
 
+function formatSalary(min, max) {
+  const fmt = n => `£${n.toLocaleString()}`
+  if (min && max) return min === max ? fmt(min) : `${fmt(min)} – ${fmt(max)}`
+  if (min) return `≥ ${fmt(min)}`
+  return `≤ ${fmt(max)}`
+}
+
 export default function Dashboard() {
   const { user, token, logout } = useAuth()
   const navigate = useNavigate()
@@ -194,10 +201,7 @@ export default function Dashboard() {
                 {(job.salary_min || job.salary_max) && (
                   <p className="job-card-meta">
                     {[
-                      (job.salary_min || job.salary_max) && [
-                        job.salary_min ? `£${job.salary_min.toLocaleString()}` : '',
-                        job.salary_max ? `£${job.salary_max.toLocaleString()}` : '',
-                      ].filter(Boolean).join(' – '),
+                      (job.salary_min || job.salary_max) && formatSalary(job.salary_min, job.salary_max),
                     ].filter(Boolean).join(' · ')}
                   </p>
                 )}
