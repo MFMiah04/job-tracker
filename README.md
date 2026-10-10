@@ -70,7 +70,7 @@ JWT_SECRET=your_secret
 CLIENT_URL=http://localhost:5173
 ```
 
-Optionally add `ALLOW_REGISTRATION=false` to close sign-ups once your own account exists.
+Sign-ups stop once there are 25 accounts; set `MAX_USERS` to change the cap, or `ALLOW_REGISTRATION=false` to close sign-ups entirely.
 
 ```bash
 npm start

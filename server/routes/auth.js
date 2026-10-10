@@ -7,7 +7,9 @@ const pool = require('../db');
 const router = express.Router();
 
 const WINDOW_MS = 15 * 60 * 1000;
-const TOO_MANY = { error: 'Too many attempts — try again in 15 minutes' };
+// Most accounts the app will hold; override with the MAX_USERS environment variable
+const MAX_USERS = Number(process.env.MAX_USERS) || 25;
+const TOO_MANY ={ error: 'Too many attempts — try again in 15 minutes' };
 
 // Emails are compared case-insensitively, so "Me@x.com" and "me@x.com" are one account
 const normaliseEmail = email => (typeof email === 'string' ? email.trim().toLowerCase() : '');
@@ -57,6 +59,12 @@ router.post('/register', async (req, res, next) => {
     const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [email]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Stop accepting sign-ups once the account cap is reached
+    const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM users');
+    if (count >= MAX_USERS) {
+      return res.status(403).json({ error: 'Sign-ups are full at the moment' });
     }
 
     // Hash the password — 10 salt rounds is the industry standard (slow enough to deter brute force)
