@@ -67,16 +67,21 @@ async function start() {
     WHERE e.id IS NULL
   `);
 
-  // Recalculate status + furthest_status for every job from its event history
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+
+  // Runs after the server is listening so a long job list doesn't delay the first request
+  recalculateAllJobs().catch(err => console.error('Background recalculation failed:', err));
+}
+
+// Recalculate status + furthest_status for every job from its event history
+async function recalculateAllJobs() {
   const { rows: allJobs } = await pool.query('SELECT id FROM jobs');
   for (const { id } of allJobs) {
     await recalculateJobStatus(id);
   }
   console.log(`Recalculated status for ${allJobs.length} jobs`);
-
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
 }
 
 start().catch(err => {
