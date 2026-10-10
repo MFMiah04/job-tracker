@@ -53,8 +53,13 @@ async function recalculateJobStatus(jobId) {
 // GET /api/jobs — get all jobs for the logged-in user
 router.get('/', async (req, res, next) => {
   try {
+    // last_event_at = most recent history event, so the dashboard can show "updated N days ago"
     const result = await pool.query(
-      'SELECT * FROM jobs WHERE user_id = $1 ORDER BY applied_at DESC NULLS LAST, created_at DESC',
+      `SELECT j.*,
+              (SELECT MAX(e.created_at) FROM job_status_events e WHERE e.job_id = j.id) AS last_event_at
+       FROM jobs j
+       WHERE j.user_id = $1
+       ORDER BY j.applied_at DESC NULLS LAST, j.created_at DESC`,
       [req.user.id]
     );
     res.status(200).json(result.rows);
