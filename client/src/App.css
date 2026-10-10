@@ -475,23 +475,6 @@
   background: hsl(0, 28%, 22%);
 }
 
-.btn-status-cycle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-subtle);
-  font-size: 10px;
-  padding: 4px 5px;
-  border-radius: var(--radius-sm);
-  line-height: 1;
-  transition: var(--transition-fast);
-}
-
-.btn-status-cycle:hover {
-  color: var(--color-text-muted);
-  background: hsl(38, 4%, 22%);
-}
-
 /* ----------------------------------------------------------
    STATUS BADGES
    ---------------------------------------------------------- */

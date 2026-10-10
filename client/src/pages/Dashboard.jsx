@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { STATUSES } from '../constants'
 
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000)
@@ -15,7 +14,7 @@ function formatSalary(min, max) {
 }
 
 export default function Dashboard() {
-  const { user, token, logout } = useAuth()
+  const { user, logout, apiFetch } = useAuth()
   const navigate = useNavigate()
 
   const [jobs, setJobs] = useState([])
@@ -27,9 +26,7 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const res = await fetch('/api/jobs', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await apiFetch('/api/jobs')
         const data = await res.json()
         if (!res.ok) {
           setError(data.error || 'Failed to load jobs')
@@ -56,9 +53,7 @@ export default function Dashboard() {
     // Lazy-load events on first expand
     if (!jobEvents[jobId]) {
       try {
-        const res = await fetch(`/api/jobs/${jobId}/events`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await apiFetch(`/api/jobs/${jobId}/events`)
         if (res.ok) {
           const data = await res.json()
           setJobEvents(prev => ({ ...prev, [jobId]: data }))
@@ -67,46 +62,11 @@ export default function Dashboard() {
     }
   }
 
-  async function handleStatusChange(e, job, direction) {
-    e.stopPropagation()
-    const currentIndex = STATUSES.indexOf(job.status)
-    const newStatus = STATUSES[(currentIndex + direction + STATUSES.length) % STATUSES.length]
-
-    // Optimistic update
-    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j))
-
-    const res = await fetch(`/api/jobs/${job.id}/events`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-
-    if (!res.ok) {
-      // Roll back on error
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: job.status } : j))
-      return
-    }
-
-    // Re-fetch events to keep history panel up to date
-    const evRes = await fetch(`/api/jobs/${job.id}/events`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (evRes.ok) {
-      const evData = await evRes.json()
-      setJobEvents(prev => ({ ...prev, [job.id]: evData }))
-    } else {
-      setJobEvents(prev => { const n = { ...prev }; delete n[job.id]; return n })
-    }
-  }
-
   async function handleDelete(id, e) {
     e.stopPropagation()
     if (!window.confirm('Delete this job application?')) return
 
-    const res = await fetch(`/api/jobs/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await apiFetch(`/api/jobs/${id}`, { method: 'DELETE' })
 
     if (res.ok) {
       setJobs(jobs => jobs.filter(job => job.id !== id))
@@ -174,19 +134,9 @@ export default function Dashboard() {
                     <span className="job-title">{job.job_title}</span>
                   </p>
                   <div className="job-card-right">
-                    <button
-                      className="btn-status-cycle"
-                      onClick={(e) => handleStatusChange(e, job, -1)}
-                      aria-label="Previous status"
-                    >◀</button>
                     <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
                       {job.status}
                     </span>
-                    <button
-                      className="btn-status-cycle"
-                      onClick={(e) => handleStatusChange(e, job, 1)}
-                      aria-label="Next status"
-                    >▶</button>
                     <button
                       className="btn-delete-card"
                       onClick={(e) => handleDelete(job.id, e)}

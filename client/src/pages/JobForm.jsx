@@ -12,21 +12,30 @@ const EMPTY_FORM = {
   notes: '',
 }
 
+// Same order the server returns events in: by day, then pipeline stage, then time
+function sortEvents(events) {
+  return [...events].sort((a, b) => {
+    const da = a.created_at.slice(0, 10), db = b.created_at.slice(0, 10)
+    if (da !== db) return da < db ? -1 : 1
+    const rankDiff = (PIPELINE_RANK[a.status] ?? 99) - (PIPELINE_RANK[b.status] ?? 99)
+    if (rankDiff !== 0) return rankDiff
+    return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+  })
+}
+
 export default function JobForm() {
   const { id } = useParams()   // id is present on /jobs/:id/edit, undefined on /jobs/new
   const isEditing = Boolean(id)
 
-  const { token } = useAuth()
+  const { apiFetch } = useAuth()
   const navigate = useNavigate()
-
-  const authJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const authOnly = { Authorization: `Bearer ${token}` }
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
   const [error, setError] = useState('')
   const [events, setEvents] = useState([])
+  const [eventError, setEventError] = useState('')
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [newEvent, setNewEvent] = useState({ status: 'Applied', created_at: '', notes: '' })
 
@@ -37,8 +46,8 @@ export default function JobForm() {
     async function fetchJob() {
       try {
         const [jobRes, eventsRes] = await Promise.all([
-          fetch(`/api/jobs/${id}`, { headers: authOnly }),
-          fetch(`/api/jobs/${id}/events`, { headers: authOnly }),
+          apiFetch(`/api/jobs/${id}`),
+          apiFetch(`/api/jobs/${id}/events`),
         ])
         const data = await jobRes.json()
         if (!jobRes.ok) {
@@ -69,57 +78,62 @@ export default function JobForm() {
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
+  // Sends an event request and reports failure in the History section.
+  // Returns the response on success, null on failure.
+  async function saveEvent(path, options) {
+    setEventError('')
+    try {
+      const res = await apiFetch(path, options)
+      if (res.ok) return res
+      const data = await res.json().catch(() => ({}))
+      setEventError(data.error || 'Could not save that change — please try again')
+    } catch {
+      setEventError('Network error — that change was not saved')
+    }
+    return null
+  }
+
   async function handleEventDateBlur(eventId, newDate) {
     if (!newDate) return
-    await fetch(`/api/jobs/${id}/events/${eventId}`, {
+    const res = await saveEvent(`/api/jobs/${id}/events/${eventId}`, {
       method: 'PUT',
-      headers: authJson,
       body: JSON.stringify({ created_at: newDate }),
     })
+    if (res) setEvents(prev => sortEvents(prev))
   }
 
   async function handleEventNotesBlur(eventId, notes) {
-    await fetch(`/api/jobs/${id}/events/${eventId}`, {
+    await saveEvent(`/api/jobs/${id}/events/${eventId}`, {
       method: 'PUT',
-      headers: authJson,
       body: JSON.stringify({ notes }),
     })
   }
 
   async function handleEventStatusChange(ev, newStatus) {
-    const res = await fetch(`/api/jobs/${id}/events/${ev.id}`, {
+    const res = await saveEvent(`/api/jobs/${id}/events/${ev.id}`, {
       method: 'PUT',
-      headers: authJson,
       body: JSON.stringify({ status: newStatus }),
     })
-    if (res.ok) {
-      setEvents(prev => prev.map(e => e.id === ev.id ? { ...e, status: newStatus } : e))
+    if (res) {
+      setEvents(prev => sortEvents(prev.map(e => e.id === ev.id ? { ...e, status: newStatus } : e)))
     }
   }
 
   async function handleDeleteEvent(eventId) {
-    const res = await fetch(`/api/jobs/${id}/events/${eventId}`, {
-      method: 'DELETE',
-      headers: authOnly,
-    })
-    if (res.ok) setEvents(prev => prev.filter(e => e.id !== eventId))
+    if (!window.confirm('Delete this history event?')) return
+    const res = await saveEvent(`/api/jobs/${id}/events/${eventId}`, { method: 'DELETE' })
+    if (res) setEvents(prev => prev.filter(e => e.id !== eventId))
   }
 
   async function handleAddEvent() {
     if (!newEvent.created_at) return
-    const res = await fetch(`/api/jobs/${id}/events`, {
+    const res = await saveEvent(`/api/jobs/${id}/events`, {
       method: 'POST',
-      headers: authJson,
       body: JSON.stringify(newEvent),
     })
-    if (res.ok) {
+    if (res) {
       const data = await res.json()
-      setEvents(prev => [...prev, data].sort((a, b) => {
-        const rankDiff = (PIPELINE_RANK[a.status] ?? 0) - (PIPELINE_RANK[b.status] ?? 0)
-        if (rankDiff !== 0) return rankDiff
-        const da = a.created_at.slice(0, 10), db = b.created_at.slice(0, 10)
-        return da < db ? -1 : da > db ? 1 : 0
-      }))
+      setEvents(prev => sortEvents([...prev, data]))
       setNewEvent({ status: 'Applied', created_at: '', notes: '' })
       setShowAddEvent(false)
     }
@@ -134,9 +148,8 @@ export default function JobForm() {
     const method = isEditing ? 'PUT' : 'POST'
 
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: authJson,
         // Convert empty strings to null so the DB gets NULL, not an empty string
         body: JSON.stringify({
           ...form,
@@ -289,6 +302,8 @@ export default function JobForm() {
                   </li>
                 ))}
               </ul>
+
+              {eventError && <p className="error-msg">{eventError}</p>}
 
               {showAddEvent ? (
                 <div className="add-event-form">
