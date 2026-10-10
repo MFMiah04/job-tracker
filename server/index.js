@@ -41,6 +41,31 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 async function start() {
+  // users and jobs already exist on a live database; these only matter for a fresh setup
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            SERIAL PRIMARY KEY,
+      email         TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS jobs (
+      id              SERIAL PRIMARY KEY,
+      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      company         TEXT NOT NULL,
+      job_title       TEXT NOT NULL,
+      source          TEXT,
+      status          TEXT NOT NULL DEFAULT 'Applied',
+      furthest_status TEXT,
+      salary_min      INTEGER,
+      salary_max      INTEGER,
+      notes           TEXT,
+      applied_at      TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS experiments (
       id         SERIAL PRIMARY KEY,

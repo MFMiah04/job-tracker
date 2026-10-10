@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { FS_RANK } from '../constants'
+import AppHeader from '../components/AppHeader'
+import ExperimentForm from '../components/ExperimentForm'
 import {
   ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -325,8 +327,6 @@ function periodCutoff(period) {
   return start ? localDateStr(start) : null
 }
 
-// furthest_status rank — same order as server PIPELINE
-const FS_RANK = { Applied: 0, OA: 1, Interview: 2, Offer: 3, Accepted: 4 }
 const fsRank = j => FS_RANK[j.furthest_status] ?? -1
 
 function computeRangeStats(jobs, from, to) {
@@ -386,8 +386,7 @@ const AB_ROWS = [
 ]
 
 export default function Stats() {
-  const { user, logout, apiFetch } = useAuth()
-  const navigate = useNavigate()
+  const { apiFetch } = useAuth()
   const [jobs, setJobs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
@@ -454,15 +453,12 @@ export default function Stats() {
         const res = await apiFetch('/api/experiments')
         if (!res.ok) return
         setExperiments(await res.json())
-      } catch {}
+      } catch {
+        // Change log is optional — the rest of the page still works without it
+      }
     }
     fetchExperiments()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function handleLogout() {
-    logout()
-    navigate('/login')
-  }
 
   async function handleAddExp(e) {
     e.preventDefault()
@@ -530,25 +526,7 @@ export default function Stats() {
 
   return (
     <div className="dashboard">
-      <div className="dashboard-header">
-        <h1>Job Tracker</h1>
-        <div className="dashboard-actions">
-          <span className="user-email">{user?.email}</span>
-          <Link to="/jobs/new" className="btn-primary btn-add">
-            + Add job
-          </Link>
-          <button className="btn-logout" onClick={handleLogout}>Log out</button>
-        </div>
-      </div>
-
-      <nav className="page-tabs">
-        <NavLink to="/" end className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
-          Applications
-        </NavLink>
-        <NavLink to="/stats" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
-          Stats
-        </NavLink>
-      </nav>
+      <AppHeader />
 
       {loading && <p className="status-msg">Loading…</p>}
       {error   && <p className="error-msg">{error}</p>}
@@ -718,101 +696,25 @@ export default function Stats() {
                 )}
 
                 {editingExp ? (
-                  <form className="add-exp-form" onSubmit={handleSaveEdit}>
-                    <div className="add-exp-fields">
-                      <div className="form-group">
-                        <label>Name *</label>
-                        <input
-                          value={editForm.name}
-                          onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
-                          placeholder="e.g. Switched to CV v2"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>From</label>
-                        <input
-                          type="date"
-                          value={editForm.start_date}
-                          onChange={e => setEditForm(p => ({ ...p, start_date: e.target.value }))}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>To</label>
-                        <input
-                          type="date"
-                          value={editForm.end_date}
-                          onChange={e => setEditForm(p => ({ ...p, end_date: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label>Notes</label>
-                      <textarea
-                        rows={2}
-                        value={editForm.notes}
-                        onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
-                        placeholder="What changed?"
-                      />
-                    </div>
-                    {editError && <p className="error-msg">{editError}</p>}
-                    <div className="add-exp-btns">
-                      <button type="submit" className="btn-primary" style={{ width: 'auto' }}>Save changes</button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => { setEditingExp(null); setEditError('') }}
-                      >Cancel</button>
-                    </div>
-                  </form>
+                  <ExperimentForm
+                    values={editForm}
+                    setValues={setEditForm}
+                    onSubmit={handleSaveEdit}
+                    onCancel={() => { setEditingExp(null); setEditError('') }}
+                    error={editError}
+                    submitLabel="Save changes"
+                  />
                 ) : !showAddExp ? (
                   <button className="btn-add-exp" onClick={() => setShowAddExp(true)}>+ Add entry</button>
                 ) : (
-                  <form className="add-exp-form" onSubmit={handleAddExp}>
-                    <div className="add-exp-fields">
-                      <div className="form-group">
-                        <label>Name *</label>
-                        <input
-                          value={newExp.name}
-                          onChange={e => setNewExp(p => ({ ...p, name: e.target.value }))}
-                          placeholder="e.g. Switched to CV v2"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>From</label>
-                        <input
-                          type="date"
-                          value={newExp.start_date}
-                          onChange={e => setNewExp(p => ({ ...p, start_date: e.target.value }))}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>To</label>
-                        <input
-                          type="date"
-                          value={newExp.end_date}
-                          onChange={e => setNewExp(p => ({ ...p, end_date: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label>Notes</label>
-                      <textarea
-                        rows={2}
-                        value={newExp.notes}
-                        onChange={e => setNewExp(p => ({ ...p, notes: e.target.value }))}
-                        placeholder="What changed?"
-                      />
-                    </div>
-                    {expError && <p className="error-msg">{expError}</p>}
-                    <div className="add-exp-btns">
-                      <button type="submit" className="btn-primary" style={{ width: 'auto' }}>Save</button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => { setShowAddExp(false); setExpError('') }}
-                      >Cancel</button>
-                    </div>
-                  </form>
+                  <ExperimentForm
+                    values={newExp}
+                    setValues={setNewExp}
+                    onSubmit={handleAddExp}
+                    onCancel={() => { setShowAddExp(false); setExpError('') }}
+                    error={expError}
+                    submitLabel="Save"
+                  />
                 )}
               </div>
             )}

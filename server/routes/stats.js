@@ -1,12 +1,12 @@
 const express = require('express');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
+const { PIPELINE, TERMINAL } = require('../statuses');
 
 const router = express.Router();
 router.use(verifyToken);
 
-const TERMINAL = ['Rejected', 'Withdrawn'];
-const PIPELINE_STATUSES = new Set(['Applied', 'OA', 'Interview', 'Offer', 'Accepted']);
+const PIPELINE_STATUSES = new Set(PIPELINE);
 
 // Builds the Sankey path for one job's ordered event statuses.
 // Returns an array like ['Applied', 'OA', 'Interview 1', 'Interview 2', 'Rejected']
@@ -102,3 +102,4 @@ router.get('/sankey', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.buildPath = buildPath;
