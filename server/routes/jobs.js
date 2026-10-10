@@ -7,6 +7,14 @@ const router = express.Router();
 // Protect all routes in this file — verifyToken runs before every handler below
 router.use(verifyToken);
 
+// Ids are integers — reject anything else here rather than letting the database error
+function requireNumericId(req, res, next, value) {
+  if (!/^\d+$/.test(value)) return res.status(400).json({ error: 'Invalid id' });
+  next();
+}
+router.param('id', requireNumericId);
+router.param('eventId', requireNumericId);
+
 const VALID_STATUSES = ['Applied', 'OA', 'Interview', 'Offer', 'Accepted', 'Rejected', 'Withdrawn'];
 const PIPELINE = ['Applied', 'OA', 'Interview', 'Offer', 'Accepted'];
 
@@ -211,9 +219,9 @@ router.put('/:id/events/:eventId', async (req, res, next) => {
            created_at = COALESCE($2, e.created_at),
            notes = CASE WHEN $3 THEN $4 ELSE e.notes END
        FROM jobs j
-       WHERE e.id = $5 AND e.job_id = j.id AND j.user_id = $6
+       WHERE e.id = $5 AND e.job_id = $7 AND e.job_id = j.id AND j.user_id = $6
        RETURNING e.*`,
-      [status || null, created_at || null, notesProvided, notes || null, req.params.eventId, req.user.id]
+      [status || null, created_at || null, notesProvided, notes || null, req.params.eventId, req.user.id, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
     await recalculateJobStatus(req.params.id);
@@ -229,9 +237,9 @@ router.delete('/:id/events/:eventId', async (req, res, next) => {
     const result = await pool.query(
       `DELETE FROM job_status_events e
        USING jobs j
-       WHERE e.id = $1 AND e.job_id = j.id AND j.user_id = $2
+       WHERE e.id = $1 AND e.job_id = $3 AND e.job_id = j.id AND j.user_id = $2
        RETURNING e.id`,
-      [req.params.eventId, req.user.id]
+      [req.params.eventId, req.user.id, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
     await recalculateJobStatus(req.params.id);

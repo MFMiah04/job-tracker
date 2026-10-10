@@ -12,6 +12,9 @@ const statsRoutes = require('./routes/stats');
 
 const app = express();
 
+// Render sits behind a proxy — trust it so req.ip is the caller, not the proxy
+app.set('trust proxy', 1);
+
 const corsOptions = {
   origin: ['http://localhost:5173', process.env.CLIENT_URL].filter(Boolean),
   credentials: true,
@@ -30,7 +33,9 @@ app.use('/api/stats', statsRoutes);
 app.use((err, req, res, next) => {
   console.error(err.stack);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ error: err.message || 'Internal server error' });
+  // Never send raw server or database error text to the client
+  const message = status >= 500 ? 'Internal server error' : err.message || 'Request failed';
+  res.status(status).json({ error: message });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -5,6 +5,12 @@ const verifyToken = require('../middleware/auth');
 const router = express.Router();
 router.use(verifyToken);
 
+// Ids are integers — reject anything else here rather than letting the database error
+router.param('id', (req, res, next, value) => {
+  if (!/^\d+$/.test(value)) return res.status(400).json({ error: 'Invalid id' });
+  next();
+});
+
 // GET /api/experiments
 router.get('/', async (req, res, next) => {
   try {
