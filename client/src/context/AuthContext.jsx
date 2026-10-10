@@ -25,8 +25,18 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  // Authenticated fetch — adds the Bearer token, and logs out if the server rejects it
+  // (expired or invalid token) so ProtectedRoute sends the user back to /login
+  async function apiFetch(path, options = {}) {
+    const headers = { Authorization: `Bearer ${token}`, ...options.headers }
+    if (options.body) headers['Content-Type'] = 'application/json'
+    const res = await fetch(path, { ...options, headers })
+    if (res.status === 401) logout()
+    return res
+  }
+
   return (
-    <AuthContext.Provider value={{ token, user, login, logout }}>
+    <AuthContext.Provider value={{ token, user, login, logout, apiFetch }}>
       {children}
     </AuthContext.Provider>
   )

@@ -37,13 +37,15 @@ async function recalculateJobStatus(jobId) {
 
   // applied_at = date of the earliest 'Applied' event, so the stats chart reflects
   // when the user actually applied rather than when the tracker entry was created.
-  const firstApplied = events.rows
-    .filter(ev => ev.status === 'Applied')
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+  // Falls back to the earliest event of any status so a job without an 'Applied'
+  // event still has a date and doesn't drop out of the stats.
+  const oldestFirst = [...events.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const firstApplied = oldestFirst.find(ev => ev.status === 'Applied') || oldestFirst[0];
   const appliedAt = firstApplied ? firstApplied.created_at : null;
 
+  // COALESCE keeps the existing applied_at when the job has no events at all
   await pool.query(
-    'UPDATE jobs SET status = $1, furthest_status = $2, applied_at = $3 WHERE id = $4',
+    'UPDATE jobs SET status = $1, furthest_status = $2, applied_at = COALESCE($3, applied_at) WHERE id = $4',
     [latestStatus, furthestStatus, appliedAt, jobId]
   );
 }

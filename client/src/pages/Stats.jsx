@@ -299,23 +299,30 @@ function buildDailyData(jobs, days) {
   return result
 }
 
+// Number of calendar days (including today) shown for the daily periods
+const PERIOD_DAYS = { week: 7, month: 30 }
+
+// Midnight at the start of the period (null = all time). Whole calendar days,
+// so the summary cards, the daily chart and the Sankey all cover the same window.
+function periodStart(period) {
+  if (period === 'all') return null
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  if (period === 'year') d.setFullYear(d.getFullYear() - 1)
+  else d.setDate(d.getDate() - (PERIOD_DAYS[period] - 1))
+  return d
+}
+
 function filterByPeriod(jobs, period) {
-  if (period === 'all') return jobs
-  const cutoff = new Date()
-  if (period === 'week')  cutoff.setDate(cutoff.getDate() - 7)
-  if (period === 'month') cutoff.setMonth(cutoff.getMonth() - 1)
-  if (period === 'year')  cutoff.setFullYear(cutoff.getFullYear() - 1)
-  return jobs.filter(j => j.applied_at && new Date(j.applied_at) >= cutoff)
+  const start = periodStart(period)
+  if (!start) return jobs
+  return jobs.filter(j => j.applied_at && new Date(j.applied_at) >= start)
 }
 
 // Returns the ISO date string for the start of the period (null = all time)
 function periodCutoff(period) {
-  if (period === 'all') return null
-  const d = new Date()
-  if (period === 'week')  d.setDate(d.getDate() - 7)
-  if (period === 'month') d.setMonth(d.getMonth() - 1)
-  if (period === 'year')  d.setFullYear(d.getFullYear() - 1)
-  return localDateStr(d)
+  const start = periodStart(period)
+  return start ? localDateStr(start) : null
 }
 
 // furthest_status rank — same order as server PIPELINE
@@ -379,7 +386,7 @@ const AB_ROWS = [
 ]
 
 export default function Stats() {
-  const { user, token, logout } = useAuth()
+  const { user, logout, apiFetch } = useAuth()
   const navigate = useNavigate()
   const [jobs, setJobs]       = useState([])
   const [loading, setLoading] = useState(true)
@@ -410,9 +417,7 @@ export default function Stats() {
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const res = await fetch('/api/jobs', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await apiFetch('/api/jobs')
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'Failed to load jobs'); return }
         setJobs(data)
@@ -431,9 +436,7 @@ export default function Stats() {
       const from = periodCutoff(period)
       const params = from ? `?from=${from}` : ''
       try {
-        const res = await fetch(`/api/stats/sankey${params}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await apiFetch(`/api/stats/sankey${params}`)
         if (res.ok) setSankeyData(await res.json())
         else console.error('Sankey fetch failed:', res.status, await res.text())
       } catch (err) {
@@ -448,9 +451,7 @@ export default function Stats() {
   useEffect(() => {
     async function fetchExperiments() {
       try {
-        const res = await fetch('/api/experiments', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await apiFetch('/api/experiments')
         if (!res.ok) return
         setExperiments(await res.json())
       } catch {}
@@ -467,9 +468,8 @@ export default function Stats() {
     e.preventDefault()
     setExpError('')
     if (!newExp.name.trim()) { setExpError('Name is required'); return }
-    const res = await fetch('/api/experiments', {
+    const res = await apiFetch('/api/experiments', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(newExp),
     })
     const data = await res.json()
@@ -490,9 +490,8 @@ export default function Stats() {
     e.preventDefault()
     setEditError('')
     if (!editForm.name.trim()) { setEditError('Name is required'); return }
-    const res = await fetch(`/api/experiments/${editingExp.id}`, {
+    const res = await apiFetch(`/api/experiments/${editingExp.id}`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(editForm),
     })
     const data = await res.json()
@@ -502,23 +501,18 @@ export default function Stats() {
   }
 
   async function handleDeleteExp(id) {
-    const res = await fetch(`/api/experiments/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    if (!window.confirm('Delete this change log entry?')) return
+    const res = await apiFetch(`/api/experiments/${id}`, { method: 'DELETE' })
     if (res.ok) setExperiments(prev => prev.filter(exp => exp.id !== id))
   }
 
   // --- computed stats ---
   const filteredJobs = filterByPeriod(jobs, period)
 
-  const byStatus = filteredJobs.reduce((acc, j) => {
-    acc[j.status] = (acc[j.status] || 0) + 1
-    return acc
-  }, {})
-
   const submitted = filteredJobs
-  const active    = filteredJobs.filter(j => ['Applied', 'OA', 'Interview'].includes(j.status))
+  const active    = filteredJobs.filter(j => ['Applied', 'OA', 'Interview', 'Offer'].includes(j.status))
+  // Same rule as A/B compare: an offer counts even if it was later declined or withdrawn
+  const offers    = submitted.filter(j => fsRank(j) >= FS_RANK.Offer)
   const responded = submitted.filter(j => j.status === 'Rejected' || fsRank(j) >= FS_RANK.OA)
   const responseRate = submitted.length
     ? Math.round((responded.length / submitted.length) * 100)
@@ -526,7 +520,7 @@ export default function Stats() {
 
   const isDaily = period === 'week' || period === 'month'
   const chartData = isDaily
-    ? buildDailyData(filteredJobs, period === 'week' ? 7 : 30)
+    ? buildDailyData(filteredJobs, PERIOD_DAYS[period])
     : buildWeeklyData(filteredJobs)
   const chartTitle = isDaily ? 'Applications per day' : 'Applications per week'
 
@@ -589,7 +583,7 @@ export default function Stats() {
               <p className="stat-label">Response rate</p>
             </div>
             <div className="stat-card">
-              <p className="stat-value">{(byStatus['Offer'] || 0) + (byStatus['Accepted'] || 0)}</p>
+              <p className="stat-value">{offers.length}</p>
               <p className="stat-label">Offers</p>
             </div>
           </div>
