@@ -65,6 +65,9 @@ export default function AppHeader() {
         <NavLink to="/stats" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
           Stats
         </NavLink>
+        <NavLink to="/account" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
+          Account
+        </NavLink>
         {isAdmin && (
           <NavLink to="/admin" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
             Admin

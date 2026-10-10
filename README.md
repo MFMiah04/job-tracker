@@ -72,7 +72,7 @@ CLIENT_URL=http://localhost:5173
 
 Optional settings:
 
-- `ADMIN_EMAIL` — the account with this email gets an Admin tab listing every account, with the option to remove one, and a notice when sign-ups are nearly or completely full.
+- `ADMIN_EMAIL` — the account with this email gets an Admin tab listing every account, with the option to remove one or reset its password, and a notice when sign-ups are nearly or completely full.
 - `MAX_USERS` — sign-ups stop at this many accounts (default 25).
 - `ALLOW_REGISTRATION=false` — closes sign-ups entirely.
 

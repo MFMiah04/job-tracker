@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
 const { MAX_USERS, isAdminEmail } = require('../config');
@@ -36,6 +38,32 @@ router.get('/users', requireAdmin, async (req, res, next) => {
        ORDER BY u.created_at ASC, u.id ASC`
     );
     res.status(200).json({ maxUsers: MAX_USERS, users: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/admin/users/:id/reset-password — give an account a temporary password.
+// The password is returned once for the admin to pass on; only its hash is stored.
+router.post('/users/:id/reset-password', requireAdmin, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+    if (Number(req.params.id) === req.user.id) {
+      return res.status(400).json({ error: 'Use the Account page to change your own password' });
+    }
+    // 12 random bytes → 16 URL-safe characters
+    const temporaryPassword = crypto.randomBytes(12).toString('base64url');
+    const password_hash = await bcrypt.hash(temporaryPassword, 10);
+    const result = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email',
+      [password_hash, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    res.status(200).json({ email: result.rows[0].email, temporaryPassword });
   } catch (err) {
     next(err);
   }

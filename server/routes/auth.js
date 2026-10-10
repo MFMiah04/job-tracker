@@ -3,12 +3,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { rateLimit } = require('express-rate-limit');
 const pool = require('../db');
+const verifyToken = require('../middleware/auth');
 const { MAX_USERS } = require('../config');
 
 const router = express.Router();
 
 const WINDOW_MS = 15 * 60 * 1000;
-const TOO_MANY ={ error: 'Too many attempts — try again in 15 minutes' };
+const TOO_MANY = { error: 'Too many attempts — try again in 15 minutes' };
 
 // Emails are compared case-insensitively, so "Me@x.com" and "me@x.com" are one account
 const normaliseEmail = email => (typeof email === 'string' ? email.trim().toLowerCase() : '');
@@ -29,6 +30,19 @@ const loginLimiter = rateLimit({
   limit: 10,
   skipSuccessfulRequests: true,
   keyGenerator: req => `login:${normaliseEmail(req.body?.email)}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: TOO_MANY,
+});
+
+// Same cap on wrong "current password" guesses per account, so a stolen session
+// can't be used to work out the password. Runs after verifyToken.
+const passwordLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (req, res) => res.statusCode !== 403,
+  keyGenerator: req => `password:${req.user.id}`,
   standardHeaders: true,
   legacyHeaders: false,
   message: TOO_MANY,
@@ -123,6 +137,37 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     );
 
     res.status(200).json({ token, user: { id: user.id, email: user.email } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/change-password — a logged-in user sets a new password
+router.post('/change-password', verifyToken, passwordLimiter, async (req, res, next) => {
+  try {
+    const { current_password, new_password } = req.body || {};
+
+    if (typeof current_password !== 'string' || typeof new_password !== 'string' || !current_password || !new_password) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+    if (new_password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (new_password === current_password) {
+      return res.status(400).json({ error: 'New password must be different from the current one' });
+    }
+
+    const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    const user = result.rows[0];
+    if (!user || !(await bcrypt.compare(current_password, user.password_hash))) {
+      // 403 rather than 401: the client treats 401 as an expired session and logs out
+      return res.status(403).json({ error: 'Current password is incorrect' });
+    }
+
+    const password_hash = await bcrypt.hash(new_password, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, req.user.id]);
+
+    res.status(200).json({ message: 'Password changed' });
   } catch (err) {
     next(err);
   }

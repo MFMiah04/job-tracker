@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import JobForm from './pages/JobForm'
 import Stats from './pages/Stats'
 import Admin from './pages/Admin'
+import Account from './pages/Account'
 import './App.css'
 
 function App() {
@@ -42,6 +43,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Stats />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <Account />
           </ProtectedRoute>
         }
       />

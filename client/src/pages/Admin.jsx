@@ -15,6 +15,7 @@ export default function Admin() {
   const [maxUsers, setMaxUsers] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reset, setReset] = useState(null) // { email, temporaryPassword } after a reset
 
   useEffect(() => {
     async function fetchUsers() {
@@ -54,6 +55,24 @@ export default function Admin() {
     }
   }
 
+  async function handleResetPassword(account) {
+    if (!window.confirm(`Reset the password for ${account.email}? Their current password will stop working.`)) return
+
+    setError('')
+    setReset(null)
+    try {
+      const res = await apiFetch(`/api/admin/users/${account.id}/reset-password`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setReset(data)
+        return
+      }
+      setError(data.error || 'Could not reset that password')
+    } catch {
+      setError('Network error — the password was not reset')
+    }
+  }
+
   return (
     <div className="dashboard">
       <AppHeader />
@@ -61,11 +80,25 @@ export default function Admin() {
       {loading && <p className="status-msg">Loading…</p>}
       {error && <p className="error-msg">{error}</p>}
 
+      {reset && (
+        <div className="reset-notice">
+          <p>
+            Temporary password for <strong>{reset.email}</strong>:{' '}
+            <code>{reset.temporaryPassword}</code>
+          </p>
+          <p>
+            Pass it on and ask them to change it on their Account page. It won't be shown again.
+          </p>
+          <button className="btn-secondary" onClick={() => setReset(null)}>Dismiss</button>
+        </div>
+      )}
+
       {!loading && maxUsers !== null && (
         <>
           <p className="job-count">
             {users.length} of {maxUsers} accounts used
           </p>
+          <div className="table-scroll">
           <table className="changelog-table">
             <thead>
               <tr>
@@ -85,15 +118,21 @@ export default function Admin() {
                     {account.id === user?.id ? (
                       <span className="admin-you">You</span>
                     ) : (
-                      <button className="btn-delete-exp" onClick={() => handleRemove(account)}>
-                        Remove
-                      </button>
+                      <>
+                        <button className="btn-set-period" onClick={() => handleResetPassword(account)}>
+                          Reset password
+                        </button>
+                        <button className="btn-delete-exp" onClick={() => handleRemove(account)}>
+                          Remove
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
     </div>
