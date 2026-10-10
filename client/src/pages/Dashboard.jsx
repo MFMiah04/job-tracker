@@ -1,9 +1,29 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { STATUSES } from '../constants'
+
+// An application still at 'Applied' after this many days is flagged as likely ghosted
+const STALE_DAYS = 21
+
+const SORTS = [
+  { value: 'applied-desc', label: 'Newest applied' },
+  { value: 'applied-asc',  label: 'Oldest applied' },
+  { value: 'updated',      label: 'Recently updated' },
+  { value: 'company',      label: 'Company A–Z' },
+]
 
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000)
+}
+
+// Whole days since dateStr (0 = today)
+function daysAgo(dateStr) {
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr)) / 86400000))
+}
+
+function formatDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function formatSalary(min, max) {
@@ -11,6 +31,36 @@ function formatSalary(min, max) {
   if (min && max) return min === max ? fmt(min) : `${fmt(min)} – ${fmt(max)}`
   if (min) return `≥ ${fmt(min)}`
   return `≤ ${fmt(max)}`
+}
+
+// Date of the job's most recent history event, falling back to when it was applied for
+function lastUpdated(job) {
+  return job.last_event_at || job.applied_at
+}
+
+function isStale(job) {
+  return job.status === 'Applied' && job.applied_at && daysAgo(job.applied_at) >= STALE_DAYS
+}
+
+// Timestamps for sorting — jobs with no date sort last in either direction
+function time(dateStr) {
+  return dateStr ? new Date(dateStr).getTime() : null
+}
+
+function compareDates(a, b, direction) {
+  if (a === null && b === null) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  return direction * (a - b)
+}
+
+function sortJobs(jobs, sortBy) {
+  const sorted = [...jobs]
+  if (sortBy === 'applied-desc') sorted.sort((a, b) => compareDates(time(a.applied_at), time(b.applied_at), -1))
+  if (sortBy === 'applied-asc')  sorted.sort((a, b) => compareDates(time(a.applied_at), time(b.applied_at), 1))
+  if (sortBy === 'updated')      sorted.sort((a, b) => compareDates(time(lastUpdated(a)), time(lastUpdated(b)), -1))
+  if (sortBy === 'company')      sorted.sort((a, b) => a.company.localeCompare(b.company, 'en', { sensitivity: 'base' }))
+  return sorted
 }
 
 export default function Dashboard() {
@@ -22,6 +72,10 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [jobEvents, setJobEvents] = useState({}) // { [jobId]: events[] }
+
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'stale' | one of STATUSES
+  const [sortBy, setSortBy] = useState('applied-desc')
 
   useEffect(() => {
     async function fetchJobs() {
@@ -43,8 +97,7 @@ export default function Dashboard() {
     fetchJobs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleCardHeaderClick(e, jobId) {
-    e.stopPropagation()
+  async function handleToggleExpand(jobId) {
     if (expandedId === jobId) {
       setExpandedId(null)
       return
@@ -78,6 +131,25 @@ export default function Dashboard() {
     logout()
     navigate('/login')
   }
+
+  // --- search, filter, sort ---
+  const statusCounts = jobs.reduce((acc, j) => {
+    acc[j.status] = (acc[j.status] || 0) + 1
+    return acc
+  }, {})
+  const staleCount = jobs.filter(isStale).length
+
+  const query = search.trim().toLowerCase()
+  const visibleJobs = sortJobs(
+    jobs.filter(job => {
+      if (statusFilter === 'stale' && !isStale(job)) return false
+      if (statusFilter !== 'all' && statusFilter !== 'stale' && job.status !== statusFilter) return false
+      if (!query) return true
+      return [job.company, job.job_title, job.source].some(v => v && v.toLowerCase().includes(query))
+    }),
+    sortBy
+  )
+  const isFiltered = query !== '' || statusFilter !== 'all'
 
   return (
     <div className="dashboard">
@@ -116,78 +188,141 @@ export default function Dashboard() {
       )}
 
       {jobs.length > 0 && (
-        <div className="job-list">
-          {jobs.map(job => {
-            const isExpanded = expandedId === job.id
-            const events = jobEvents[job.id] || []
+        <>
+          <div className="job-toolbar">
+            <input
+              type="search"
+              className="job-search"
+              placeholder="Search company, title or source"
+              aria-label="Search applications"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <select
+              className="job-filter"
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All statuses ({jobs.length})</option>
+              {STATUSES.map(s => (
+                <option key={s} value={s}>{s} ({statusCounts[s] || 0})</option>
+              ))}
+              <option value="stale">No reply in {STALE_DAYS}+ days ({staleCount})</option>
+            </select>
+            <select
+              className="job-filter"
+              aria-label="Sort applications"
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+            >
+              {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
 
-            return (
-              <div key={job.id} className={`job-card${isExpanded ? ' expanded' : ''}`} onClick={() => navigate(`/jobs/${job.id}/edit`)}>
-                {/* Header row — click to expand/collapse */}
-                <div
-                  className="job-card-top"
-                  onClick={(e) => handleCardHeaderClick(e, job.id)}
-                >
-                  <p className="job-identity">
-                    <span className="job-company">{job.company}</span>
-                    <span className="job-title-sep">·</span>
-                    <span className="job-title">{job.job_title}</span>
-                  </p>
-                  <div className="job-card-right">
-                    <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
-                      {job.status}
-                    </span>
-                    <button
-                      className="btn-delete-card"
-                      onClick={(e) => handleDelete(job.id, e)}
-                      aria-label="Delete job"
-                    >
-                      ✕
-                    </button>
+          {isFiltered && (
+            <p className="job-count">
+              Showing {visibleJobs.length} of {jobs.length}
+            </p>
+          )}
+
+          {visibleJobs.length === 0 && (
+            <p className="status-msg">No applications match.</p>
+          )}
+
+          <div className="job-list">
+            {visibleJobs.map(job => {
+              const isExpanded = expandedId === job.id
+              const events = jobEvents[job.id] || []
+              const updated = lastUpdated(job)
+              const updatedDays = updated ? daysAgo(updated) : null
+              const meta = [
+                job.applied_at && `Applied ${formatDate(job.applied_at)}`,
+                job.source,
+                (job.salary_min || job.salary_max) && formatSalary(job.salary_min, job.salary_max),
+                updatedDays !== null && (updatedDays === 0 ? 'Updated today' : `Updated ${updatedDays}d ago`),
+              ].filter(Boolean)
+
+              return (
+                <div key={job.id} className={`job-card${isExpanded ? ' expanded' : ''}`}>
+                  {/* Header row — click to expand/collapse */}
+                  <div
+                    className="job-card-top"
+                    onClick={() => handleToggleExpand(job.id)}
+                  >
+                    <p className="job-identity">
+                      <span className="job-company">{job.company}</span>
+                      <span className="job-title-sep">·</span>
+                      <span className="job-title">{job.job_title}</span>
+                    </p>
+                    <div className="job-card-right">
+                      {isStale(job) && (
+                        <span className="stale-tag" title={`Still at Applied after ${STALE_DAYS}+ days`}>
+                          No reply · {daysAgo(job.applied_at)}d
+                        </span>
+                      )}
+                      <span className={`status-badge status-${job.status.toLowerCase().replace(' ', '-')}`}>
+                        {job.status}
+                      </span>
+                      <Link
+                        to={`/jobs/${job.id}/edit`}
+                        className="btn-edit-card"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        Edit
+                      </Link>
+                      <button
+                        className="btn-delete-card"
+                        onClick={(e) => handleDelete(job.id, e)}
+                        aria-label="Delete job"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Meta row */}
+                  {meta.length > 0 && (
+                    <p className="job-card-meta" onClick={() => handleToggleExpand(job.id)}>
+                      {meta.join(' · ')}
+                    </p>
+                  )}
+
+                  {/* Expanded history */}
+                  {isExpanded && (
+                    <div className="job-card-history">
+                      {job.notes && <p className="job-notes">{job.notes}</p>}
+                      {events.length === 0 ? (
+                        <p className="event-empty">No status history yet.</p>
+                      ) : (
+                        <ul className="event-list">
+                          {events.map((ev, i) => {
+                            const prev = events[i - 1]
+                            const days = prev ? daysBetween(prev.created_at, ev.created_at) : null
+                            return (
+                              <li key={i} className="event-row">
+                                <span className={`status-badge status-${ev.status.toLowerCase().replace(' ', '-')} event-badge`}>
+                                  {ev.status}
+                                </span>
+                                <span className="event-date">
+                                  {formatDate(ev.created_at)}
+                                </span>
+                                {days !== null && days > 0 && (
+                                  <span className="event-delta">+{days}d</span>
+                                )}
+                                {ev.notes && <span className="event-note">{ev.notes}</span>}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
-
-                {/* Meta row */}
-                {(job.salary_min || job.salary_max) && (
-                  <p className="job-card-meta">
-                    {[
-                      (job.salary_min || job.salary_max) && formatSalary(job.salary_min, job.salary_max),
-                    ].filter(Boolean).join(' · ')}
-                  </p>
-                )}
-
-                {/* Expanded history */}
-                {isExpanded && (
-                  <div className="job-card-history">
-                    {events.length === 0 ? (
-                      <p className="event-empty">No status history yet.</p>
-                    ) : (
-                      <ul className="event-list">
-                        {events.map((ev, i) => {
-                          const prev = events[i - 1]
-                          const days = prev ? daysBetween(prev.created_at, ev.created_at) : null
-                          return (
-                            <li key={i} className="event-row">
-                              <span className={`status-badge status-${ev.status.toLowerCase().replace(' ', '-')} event-badge`}>
-                                {ev.status}
-                              </span>
-                              <span className="event-date">
-                                {new Date(ev.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </span>
-                              {days !== null && days > 0 && (
-                                <span className="event-delta">+{days}d</span>
-                              )}
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )

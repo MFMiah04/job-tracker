@@ -222,6 +222,46 @@
 /* ----------------------------------------------------------
    JOB CARDS
    ---------------------------------------------------------- */
+.job-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.job-search,
+.job-filter {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  transition: var(--transition-colors);
+}
+
+.job-search {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.job-search:focus,
+.job-filter:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.job-search::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.job-count {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
 .job-list {
   display: flex;
   flex-direction: column;
@@ -291,7 +331,22 @@
 .job-card-history {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border);
-  cursor: pointer;
+}
+
+.job-notes {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+}
+
+.stale-tag {
+  padding: 3px 10px;
+  border: 1px solid hsl(38, 30%, 32%);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: hsl(38, 65%, 70%);
+  white-space: nowrap;
 }
 
 .event-list {
@@ -324,24 +379,30 @@
   color: var(--color-text-subtle);
 }
 
+.event-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
 .event-empty {
   font-size: var(--text-sm);
   color: var(--color-text-subtle);
   margin: 0 0 var(--space-3);
 }
 
-.card-edit-link {
-  background: none;
-  border: none;
-  cursor: pointer;
+.btn-edit-card {
   font-size: var(--text-sm);
   color: var(--color-text-subtle);
-  padding: 0;
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
   transition: var(--transition-fast);
 }
 
-.card-edit-link:hover {
+.btn-edit-card:hover {
   color: var(--color-text);
+  background: hsl(38, 4%, 22%);
 }
 
 .rejection-breakdown {
@@ -879,3 +940,31 @@
 .delta-up      { color: hsl(150, 55%, 55%); font-weight: var(--weight-medium); }
 .delta-down    { color: hsl(0, 65%, 60%);   font-weight: var(--weight-medium); }
 .delta-neutral { color: var(--color-text-subtle); }
+
+/* ----------------------------------------------------------
+   DASHBOARD — NARROW SCREENS
+   ---------------------------------------------------------- */
+@media (max-width: 640px) {
+  .dashboard-header,
+  .dashboard-actions,
+  .job-card-top {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-header {
+    gap: var(--space-3);
+  }
+
+  .job-card-top {
+    gap: var(--space-2);
+  }
+
+  .job-search {
+    flex-basis: 100%;
+  }
+
+  .job-filter {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
