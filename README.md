@@ -70,7 +70,11 @@ JWT_SECRET=your_secret
 CLIENT_URL=http://localhost:5173
 ```
 
-Sign-ups stop once there are 25 accounts; set `MAX_USERS` to change the cap, or `ALLOW_REGISTRATION=false` to close sign-ups entirely.
+Optional settings:
+
+- `ADMIN_EMAIL` — the account with this email gets an Admin tab listing every account, with the option to remove one, and a notice when sign-ups are nearly or completely full.
+- `MAX_USERS` — sign-ups stop at this many accounts (default 25).
+- `ALLOW_REGISTRATION=false` — closes sign-ups entirely.
 
 ```bash
 npm start

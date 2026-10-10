@@ -1,15 +1,37 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-// Title bar and the Applications / Stats tabs, shared by the two main pages
+// Warn the admin once this share of the account limit is used
+const NEARLY_FULL = 0.8
+
+// Title bar and the page tabs, shared by the main pages.
+// The admin account also gets an Admin tab and a notice when sign-ups are nearly or completely full.
 export default function AppHeader() {
-  const { user, logout } = useAuth()
+  const { user, logout, apiFetch } = useAuth()
   const navigate = useNavigate()
+  const [admin, setAdmin] = useState(null) // { isAdmin, userCount, maxUsers } once loaded
+
+  useEffect(() => {
+    async function fetchAdminStatus() {
+      try {
+        const res = await apiFetch('/api/admin/status')
+        if (res.ok) setAdmin(await res.json())
+      } catch {
+        // Not critical — the header works without the admin extras
+      }
+    }
+    fetchAdminStatus()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleLogout() {
     logout()
     navigate('/login')
   }
+
+  const isAdmin = Boolean(admin?.isAdmin)
+  const isFull = isAdmin && admin.userCount >= admin.maxUsers
+  const isNearlyFull = isAdmin && !isFull && admin.userCount >= admin.maxUsers * NEARLY_FULL
 
   return (
     <>
@@ -26,6 +48,16 @@ export default function AppHeader() {
         </div>
       </div>
 
+      {(isFull || isNearlyFull) && (
+        <p className={`admin-banner${isFull ? ' full' : ''}`}>
+          {isFull
+            ? `Sign-ups are full: ${admin.userCount} of ${admin.maxUsers} accounts. Nobody new can register.`
+            : `Sign-ups are nearly full: ${admin.userCount} of ${admin.maxUsers} accounts.`}
+          {' '}
+          <Link to="/admin">Manage accounts</Link>
+        </p>
+      )}
+
       <nav className="page-tabs">
         <NavLink to="/" end className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
           Applications
@@ -33,6 +65,11 @@ export default function AppHeader() {
         <NavLink to="/stats" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
           Stats
         </NavLink>
+        {isAdmin && (
+          <NavLink to="/admin" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
+            Admin
+          </NavLink>
+        )}
       </nav>
     </>
   )

@@ -9,6 +9,7 @@ const jobRoutes = require('./routes/jobs');
 const { recalculateJobStatus } = jobRoutes;
 const experimentRoutes = require('./routes/experiments');
 const statsRoutes = require('./routes/stats');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/experiments', experimentRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Global error handler — must have exactly 4 params so Express recognises it as an error handler
 // Must be registered after all routes or it won't catch their errors

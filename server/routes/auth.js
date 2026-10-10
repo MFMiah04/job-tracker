@@ -3,12 +3,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { rateLimit } = require('express-rate-limit');
 const pool = require('../db');
+const { MAX_USERS } = require('../config');
 
 const router = express.Router();
 
 const WINDOW_MS = 15 * 60 * 1000;
-// Most accounts the app will hold; override with the MAX_USERS environment variable
-const MAX_USERS = Number(process.env.MAX_USERS) || 25;
 const TOO_MANY ={ error: 'Too many attempts — try again in 15 minutes' };
 
 // Emails are compared case-insensitively, so "Me@x.com" and "me@x.com" are one account
