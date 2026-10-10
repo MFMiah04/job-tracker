@@ -30,15 +30,17 @@ A full-stack web app to track job applications, statuses, and notes throughout t
 
 **Uniform auth error messages** — both "email not found" and "wrong password" return the same `Invalid credentials` response. Different messages would let an attacker enumerate which emails are registered.
 
+**Rate-limited auth** — failed logins are capped per email (10 per 15 minutes) as well as per IP, so password guessing is throttled even when the caller's address is hidden behind a proxy.
+
+**Status derived from history** — a job's status is never set directly. Each change is stored as an event, and the current status, furthest stage reached, and applied date are recalculated from those events. The stats and pipeline chart read the same history.
+
 **Vite proxy in dev, Vercel rewrites in prod** — in development, Vite forwards `/api/*` to the Express server. In production, a `vercel.json` rewrite does the same to the Render URL. Components always call `/api/...` with no environment-specific logic.
 
 ---
 
 ## What I'd add next
 
-- **Search and filter** by status, company, or date range
 - **OAuth** (Google sign-in) as an alternative to email/password
-- **Rate limiting** on auth endpoints to prevent brute force
 - **Pagination** once the job list grows large enough to matter
 
 ---
@@ -47,29 +49,7 @@ A full-stack web app to track job applications, statuses, and notes throughout t
 
 ### Prerequisites
 - Node.js 18+
-- A [Neon](https://neon.tech) PostgreSQL database with the following tables:
-
-```sql
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE jobs (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  company TEXT NOT NULL,
-  role TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'Applied',
-  location TEXT,
-  salary TEXT,
-  applied_at DATE,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+- A [Neon](https://neon.tech) PostgreSQL database. It can be empty: the server creates its tables on first start (see `server/index.js`).
 
 ### Setup
 
@@ -90,9 +70,17 @@ JWT_SECRET=your_secret
 CLIENT_URL=http://localhost:5173
 ```
 
+Optional settings:
+
+- `ADMIN_EMAIL` — the account with this email gets an Admin tab listing every account, with the option to remove one, and a notice when sign-ups are nearly or completely full.
+- `MAX_USERS` — sign-ups stop at this many accounts (default 25).
+- `ALLOW_REGISTRATION=false` — closes sign-ups entirely.
+
 ```bash
 npm start
 ```
+
+Run the tests with `npm test`.
 
 **Frontend**
 ```bash

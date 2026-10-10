@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES } from '../constants'
+import AppHeader from '../components/AppHeader'
 
 // An application still at 'Applied' after this many days is flagged as likely ghosted
 const STALE_DAYS = 21
@@ -64,8 +65,7 @@ function sortJobs(jobs, sortBy) {
 }
 
 export default function Dashboard() {
-  const { user, logout, apiFetch } = useAuth()
-  const navigate = useNavigate()
+  const { apiFetch } = useAuth()
 
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -111,7 +111,9 @@ export default function Dashboard() {
           const data = await res.json()
           setJobEvents(prev => ({ ...prev, [jobId]: data }))
         }
-      } catch {}
+      } catch {
+        // Leave the history empty — collapsing and re-expanding the card retries
+      }
     }
   }
 
@@ -125,11 +127,6 @@ export default function Dashboard() {
       setJobs(jobs => jobs.filter(job => job.id !== id))
       if (expandedId === id) setExpandedId(null)
     }
-  }
-
-  function handleLogout() {
-    logout()
-    navigate('/login')
   }
 
   // --- search, filter, sort ---
@@ -153,27 +150,7 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      <div className="dashboard-header">
-        <h1>Job Tracker</h1>
-        <div className="dashboard-actions">
-          <span className="user-email">{user?.email}</span>
-          <Link to="/jobs/new" className="btn-primary btn-add">
-            + Add job
-          </Link>
-          <button className="btn-logout" onClick={handleLogout}>
-            Log out
-          </button>
-        </div>
-      </div>
-
-      <nav className="page-tabs">
-        <NavLink to="/" end className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
-          Applications
-        </NavLink>
-        <NavLink to="/stats" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
-          Stats
-        </NavLink>
-      </nav>
+      <AppHeader />
 
       {loading && <p className="status-msg">Loading…</p>}
       {error && <p className="error-msg">{error}</p>}

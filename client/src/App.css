@@ -942,6 +942,33 @@
 .delta-neutral { color: var(--color-text-subtle); }
 
 /* ----------------------------------------------------------
+   ADMIN
+   ---------------------------------------------------------- */
+.admin-banner {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid hsl(38, 30%, 32%);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: hsl(38, 65%, 70%);
+}
+
+.admin-banner.full {
+  border-color: hsl(0, 28%, 36%);
+  color: var(--color-error);
+}
+
+.admin-banner a {
+  color: inherit;
+  font-weight: var(--weight-medium);
+}
+
+.admin-you {
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
+/* ----------------------------------------------------------
    DASHBOARD — NARROW SCREENS
    ---------------------------------------------------------- */
 @media (max-width: 640px) {

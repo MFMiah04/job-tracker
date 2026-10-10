@@ -1,16 +1,53 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { rateLimit } = require('express-rate-limit');
 const pool = require('../db');
+const { MAX_USERS } = require('../config');
 
 const router = express.Router();
+
+const WINDOW_MS = 15 * 60 * 1000;
+const TOO_MANY ={ error: 'Too many attempts — try again in 15 minutes' };
+
+// Emails are compared case-insensitively, so "Me@x.com" and "me@x.com" are one account
+const normaliseEmail = email => (typeof email === 'string' ? email.trim().toLowerCase() : '');
+
+// Loose cap per IP on all auth routes
+const ipLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: TOO_MANY,
+});
+
+// Tight cap on failed logins per email, so password guessing is throttled
+// even when the caller's real IP is hidden behind a proxy
+const loginLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: req => `login:${normaliseEmail(req.body?.email)}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: TOO_MANY,
+});
+
+router.use(ipLimiter);
 
 // POST /api/auth/register
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    // Set ALLOW_REGISTRATION=false to close sign-ups on a personal deployment
+    if (process.env.ALLOW_REGISTRATION === 'false') {
+      return res.status(403).json({ error: 'Registration is closed' });
+    }
 
-    if (!email || !password) {
+    const email = normaliseEmail(req.body?.email);
+    const password = req.body?.password;
+
+    if (!email || typeof password !== 'string' || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     if (password.length < 8) {
@@ -18,9 +55,15 @@ router.post('/register', async (req, res, next) => {
     }
 
     // Check if email is already registered
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [email]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Stop accepting sign-ups once the account cap is reached
+    const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM users');
+    if (count >= MAX_USERS) {
+      return res.status(403).json({ error: 'Sign-ups are full at the moment' });
     }
 
     // Hash the password — 10 salt rounds is the industry standard (slow enough to deter brute force)
@@ -46,16 +89,17 @@ router.post('/register', async (req, res, next) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const email = normaliseEmail(req.body?.email);
+    const password = req.body?.password;
 
-    if (!email || !password) {
+    if (!email || typeof password !== 'string' || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const result = await pool.query(
-      'SELECT id, email, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, password_hash FROM users WHERE LOWER(email) = $1 ORDER BY id LIMIT 1',
       [email]
     );
 
