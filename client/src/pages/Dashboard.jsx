@@ -14,13 +14,23 @@ const SORTS = [
   { value: 'company',      label: 'Company A–Z' },
 ]
 
+// Calendar days from a to b in local time
 function daysBetween(a, b) {
-  return Math.round((new Date(b) - new Date(a)) / 86400000)
+  const start = new Date(a)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(b)
+  end.setHours(0, 0, 0, 0)
+  return Math.round((end - start) / 86400000)
 }
 
-// Whole days since dateStr (0 = today)
+// Calendar days since dateStr in local time (0 = today, 1 = yesterday).
+// Compares midnights rather than elapsed 24h periods, so yesterday evening is 1 even before 24h have passed.
 function daysAgo(dateStr) {
-  return Math.max(0, Math.floor((Date.now() - new Date(dateStr)) / 86400000))
+  const then = new Date(dateStr)
+  then.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.round((today - then) / 86400000))
 }
 
 function formatDate(dateStr) {
