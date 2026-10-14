@@ -49,6 +49,18 @@ function lastUpdated(job) {
   return job.last_event_at || job.applied_at
 }
 
+// Stages where the next step is on you (a task) or on them (waiting)
+const ACTIVE_STAGES = ['OA', 'Interview']
+
+function hasOpenTasks(job) {
+  return job.open_tasks > 0
+}
+
+// At OA/Interview with nothing left to do — the ball is in their court
+function isWaiting(job) {
+  return ACTIVE_STAGES.includes(job.status) && !hasOpenTasks(job)
+}
+
 function isStale(job) {
   return job.status === 'Applied' && job.applied_at && daysAgo(job.applied_at) >= STALE_DAYS
 }
@@ -84,7 +96,7 @@ export default function Dashboard() {
   const [jobEvents, setJobEvents] = useState({}) // { [jobId]: events[] }
 
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'stale' | one of STATUSES
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'todo' | 'waiting' | 'stale' | one of STATUSES
   const [sortBy, setSortBy] = useState('applied-desc')
 
   useEffect(() => {
@@ -145,12 +157,18 @@ export default function Dashboard() {
     return acc
   }, {})
   const staleCount = jobs.filter(isStale).length
+  const todoCount = jobs.filter(hasOpenTasks).length
+  const waitingCount = jobs.filter(isWaiting).length
+
+  // Filters that aren't a plain status
+  const SPECIAL_FILTERS = { stale: isStale, todo: hasOpenTasks, waiting: isWaiting }
 
   const query = search.trim().toLowerCase()
   const visibleJobs = sortJobs(
     jobs.filter(job => {
-      if (statusFilter === 'stale' && !isStale(job)) return false
-      if (statusFilter !== 'all' && statusFilter !== 'stale' && job.status !== statusFilter) return false
+      const special = SPECIAL_FILTERS[statusFilter]
+      if (special && !special(job)) return false
+      if (!special && statusFilter !== 'all' && job.status !== statusFilter) return false
       if (!query) return true
       return [job.company, job.job_title, job.source].some(v => v && v.toLowerCase().includes(query))
     }),
@@ -195,6 +213,8 @@ export default function Dashboard() {
               {STATUSES.map(s => (
                 <option key={s} value={s}>{s} ({statusCounts[s] || 0})</option>
               ))}
+              <option value="todo">Tasks to do ({todoCount})</option>
+              <option value="waiting">Waiting on them ({waitingCount})</option>
               <option value="stale">No reply in {STALE_DAYS}+ days ({staleCount})</option>
             </select>
             <select
@@ -243,6 +263,16 @@ export default function Dashboard() {
                       <span className="job-title">{job.job_title}</span>
                     </p>
                     <div className="job-card-right">
+                      {hasOpenTasks(job) && (
+                        <span className="todo-tag" title="Open tasks for this job">
+                          {job.open_tasks} to do
+                        </span>
+                      )}
+                      {isWaiting(job) && (
+                        <span className="waiting-tag" title="Nothing left for you to do — waiting to hear back">
+                          Waiting
+                        </span>
+                      )}
                       {isStale(job) && (
                         <span className="stale-tag" title={`Still at Applied after ${STALE_DAYS}+ days`}>
                           No reply · {daysAgo(job.applied_at)}d

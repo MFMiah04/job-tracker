@@ -7,6 +7,7 @@ import JobForm from './pages/JobForm'
 import Stats from './pages/Stats'
 import Admin from './pages/Admin'
 import Account from './pages/Account'
+import Tasks from './pages/Tasks'
 import './App.css'
 
 function App() {
@@ -43,6 +44,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Stats />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks"
+        element={
+          <ProtectedRoute>
+            <Tasks />
           </ProtectedRoute>
         }
       />

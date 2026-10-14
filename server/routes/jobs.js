@@ -66,9 +66,11 @@ async function recalculateJobStatus(jobId) {
 router.get('/', async (req, res, next) => {
   try {
     // last_event_at = most recent history event, so the dashboard can show "updated N days ago"
+    // open_tasks = tasks not yet ticked off, so the dashboard can show "to do" vs "waiting"
     const result = await pool.query(
       `SELECT j.*,
-              (SELECT MAX(e.created_at) FROM job_status_events e WHERE e.job_id = j.id) AS last_event_at
+              (SELECT MAX(e.created_at) FROM job_status_events e WHERE e.job_id = j.id) AS last_event_at,
+              (SELECT COUNT(*)::int FROM tasks t WHERE t.job_id = j.id AND t.done_at IS NULL) AS open_tasks
        FROM jobs j
        WHERE j.user_id = $1
        ORDER BY j.applied_at DESC NULLS LAST, j.created_at DESC`,

@@ -1,6 +1,6 @@
 # Job Tracker
 
-A full-stack web app to track job applications, statuses, and notes throughout the hiring process.
+A full-stack web app to track job applications, statuses, and notes throughout the hiring process, with a to-do list for assessments and interviews so it's clear which applications are waiting on you and which are waiting on the employer.
 
 **Live demo**: https://job-tracker-fahim.vercel.app
 

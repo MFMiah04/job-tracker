@@ -7,10 +7,25 @@ const NEARLY_FULL = 0.8
 
 // Title bar and the page tabs, shared by the main pages.
 // The admin account also gets an Admin tab and a notice when sign-ups are nearly or completely full.
-export default function AppHeader() {
+// The To do page passes `openTasks` so the tab count updates as tasks are ticked off.
+export default function AppHeader({ openTasks }) {
   const { user, logout, apiFetch } = useAuth()
   const navigate = useNavigate()
   const [admin, setAdmin] = useState(null) // { isAdmin, userCount, maxUsers } once loaded
+  const [fetchedOpenTasks, setFetchedOpenTasks] = useState(null)
+
+  useEffect(() => {
+    if (openTasks !== undefined) return // the page is supplying a live count
+    async function fetchOpenTasks() {
+      try {
+        const res = await apiFetch('/api/tasks')
+        if (res.ok) setFetchedOpenTasks((await res.json()).filter(t => !t.done_at).length)
+      } catch {
+        // Not critical — the tab just shows no count
+      }
+    }
+    fetchOpenTasks()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function fetchAdminStatus() {
@@ -29,6 +44,7 @@ export default function AppHeader() {
     navigate('/login')
   }
 
+  const openCount = openTasks ?? fetchedOpenTasks
   const isAdmin = Boolean(admin?.isAdmin)
   const isFull = isAdmin && admin.userCount >= admin.maxUsers
   const isNearlyFull = isAdmin && !isFull && admin.userCount >= admin.maxUsers * NEARLY_FULL
@@ -61,6 +77,10 @@ export default function AppHeader() {
       <nav className="page-tabs">
         <NavLink to="/" end className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
           Applications
+        </NavLink>
+        <NavLink to="/tasks" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
+          To do
+          {openCount > 0 && <span className="tab-count">{openCount}</span>}
         </NavLink>
         <NavLink to="/stats" className={({ isActive }) => isActive ? 'tab active' : 'tab'}>
           Stats

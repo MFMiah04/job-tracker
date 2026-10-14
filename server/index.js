@@ -10,6 +10,7 @@ const { recalculateJobStatus } = jobRoutes;
 const experimentRoutes = require('./routes/experiments');
 const statsRoutes = require('./routes/stats');
 const adminRoutes = require('./routes/admin');
+const taskRoutes = require('./routes/tasks');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/experiments', experimentRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // Global error handler — must have exactly 4 params so Express recognises it as an error handler
 // Must be registered after all routes or it won't catch their errors
@@ -84,6 +86,20 @@ async function start() {
       id         SERIAL PRIMARY KEY,
       job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
       status     TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // Things to do for a job (an assessment, an interview); done_at is set when ticked off
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      title      TEXT NOT NULL,
+      link       TEXT,
+      given_at   DATE NOT NULL DEFAULT CURRENT_DATE,
+      due_at     DATE,
+      done_at    TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
