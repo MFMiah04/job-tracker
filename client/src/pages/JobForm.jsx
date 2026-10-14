@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES, PIPELINE_RANK } from '../constants'
+import TaskPanel from '../components/TaskPanel'
 
 const EMPTY_FORM = {
   company: '',
@@ -262,6 +263,13 @@ export default function JobForm() {
           </div>
 
           {error && <p className="error-msg">{error}</p>}
+
+          {isEditing && (
+            <div className="history-section">
+              <p className="history-label">Tasks</p>
+              <TaskPanel jobId={id} />
+            </div>
+          )}
 
           {isEditing && (
             <div className="history-section">
