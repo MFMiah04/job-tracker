@@ -79,11 +79,16 @@ export default function Tasks() {
               </p>
             </div>
             <div className="task-actions">
-              <button type="button" className="btn-edit-card" onClick={() => setAddFor({ jobId: stage.job_id })}>
+              <button type="button" className="btn-pill" onClick={() => setAddFor({ jobId: stage.job_id })}>
                 + Task
               </button>
-              <button type="button" className="btn-edit-card" onClick={() => handleMarkWaiting(stage)}>
-                Waiting
+              <button
+                type="button"
+                className="btn-pill accent"
+                title="Mark this round as done — waiting to hear back"
+                onClick={() => handleMarkWaiting(stage)}
+              >
+                Mark waiting
               </button>
             </div>
           </li>
