@@ -1,18 +1,16 @@
-// Stages where something is on you (to do) until you mark it as waiting on them
+// Stages that are something for you to do until you mark them as waiting on them
 export const ACTIVE_STAGES = ['OA', 'Interview']
 
 // What a job needs next:
-//   'todo'    — it has open tasks, or it's at OA/Interview and you haven't marked it as waiting
-//   'waiting' — you've marked its current stage as done and are waiting to hear back
+//   'todo'    — it has open tasks, or an OA/Interview round in its history still marked to do
+//   'waiting' — it's at OA/Interview and every round is marked as waiting on them
 //   null      — neither (e.g. Applied, Offer, Rejected)
-// Pass `openTasks` when you have a fresher count than the job's own open_tasks.
-export function nextStep(job, openTasks = job.open_tasks) {
-  if (openTasks > 0) return 'todo'
-  if (!ACTIVE_STAGES.includes(job.status)) return null
-  return job.waiting_status === job.status ? 'waiting' : 'todo'
+export function nextStep(job) {
+  if (job.open_tasks > 0 || job.todo_stages > 0) return 'todo'
+  return ACTIVE_STAGES.includes(job.status) ? 'waiting' : null
 }
 
-// Can this job be marked as waiting right now? Only at OA/Interview, and only once its tasks are done.
-export function canMarkWaiting(job, openTasks = job.open_tasks) {
-  return ACTIVE_STAGES.includes(job.status) && !(openTasks > 0)
+// How many to-do items a job contributes to the To do count (open tasks + rounds still to do)
+export function todoItems(job) {
+  return (job.open_tasks || 0) + (job.todo_stages || 0)
 }

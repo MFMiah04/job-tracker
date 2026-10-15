@@ -1,7 +1,9 @@
 const express = require('express');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
-const { PIPELINE, VALID_STATUSES } = require('../statuses');
+const { PIPELINE, VALID_STATUSES, ACTIVE_STAGES } = require('../statuses');
+
+const ACTIVE_STAGES_SQL = ACTIVE_STAGES.map(s => `'${s}'`).join(', ');
 
 const router = express.Router();
 
@@ -66,11 +68,14 @@ async function recalculateJobStatus(jobId) {
 router.get('/', async (req, res, next) => {
   try {
     // last_event_at = most recent history event, so the dashboard can show "updated N days ago"
-    // open_tasks = tasks not yet ticked off, so the dashboard can show "to do" vs "waiting"
+    // open_tasks = tasks not yet ticked off; todo_stages = OA/Interview events not yet marked waiting.
+    // Together they decide whether the dashboard shows "to do" or "waiting".
     const result = await pool.query(
       `SELECT j.*,
               (SELECT MAX(e.created_at) FROM job_status_events e WHERE e.job_id = j.id) AS last_event_at,
-              (SELECT COUNT(*)::int FROM tasks t WHERE t.job_id = j.id AND t.done_at IS NULL) AS open_tasks
+              (SELECT COUNT(*)::int FROM tasks t WHERE t.job_id = j.id AND t.done_at IS NULL) AS open_tasks,
+              (SELECT COUNT(*)::int FROM job_status_events e
+               WHERE e.job_id = j.id AND e.status IN (${ACTIVE_STAGES_SQL}) AND NOT e.waiting) AS todo_stages
        FROM jobs j
        WHERE j.user_id = $1
        ORDER BY j.applied_at DESC NULLS LAST, j.created_at DESC`,
@@ -166,34 +171,12 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// PUT /api/jobs/:id/waiting — mark the job's current stage as "waiting on them" (or back to to-do).
-// Stored as the status it applies to, so moving to a new stage makes the job to-do again automatically.
-router.put('/:id/waiting', async (req, res, next) => {
-  try {
-    if (typeof req.body?.waiting !== 'boolean') {
-      return res.status(400).json({ error: 'waiting must be true or false' });
-    }
-    const result = await pool.query(
-      `UPDATE jobs SET waiting_status = CASE WHEN $1 THEN status ELSE NULL END
-       WHERE id = $2 AND user_id = $3
-       RETURNING id, status, waiting_status`,
-      [req.body.waiting, req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    next(err);
-  }
-});
-
 // GET /api/jobs/:id/events — status history for a job
 router.get('/:id/events', async (req, res, next) => {
   try {
     // Verify the job belongs to the user before returning events
     const result = await pool.query(
-      `SELECT e.id, e.status, e.notes, e.created_at
+      `SELECT e.id, e.status, e.notes, e.waiting, e.created_at
        FROM job_status_events e
        JOIN jobs j ON j.id = e.job_id
        WHERE e.job_id = $1 AND j.user_id = $2
@@ -225,19 +208,46 @@ router.post('/:id/events', async (req, res, next) => {
        VALUES ($1, $2, $3, $4) RETURNING *`,
       [req.params.id, status, created_at || new Date(), notes || null]
     );
+
+    // A newer stage means earlier OA/Interview rounds are finished — mark them waiting
+    await pool.query(
+      `UPDATE job_status_events e SET waiting = TRUE
+       FROM job_status_events n
+       WHERE n.id = $1 AND e.job_id = n.job_id AND e.id <> n.id
+         AND e.status IN (${ACTIVE_STAGES_SQL}) AND NOT e.waiting
+         AND (e.created_at::date, ${statusOrderSQL('e.status')}, e.created_at)
+           < (n.created_at::date, ${statusOrderSQL('n.status')}, n.created_at)`,
+      [result.rows[0].id]
+    );
+    // …and a backdated round added behind a later stage is already finished too
+    const { rows: [added] } = await pool.query(
+      `UPDATE job_status_events n SET waiting = TRUE
+       WHERE n.id = $1 AND n.status IN (${ACTIVE_STAGES_SQL})
+         AND EXISTS (
+           SELECT 1 FROM job_status_events e
+           WHERE e.job_id = n.job_id AND e.id <> n.id
+             AND (e.created_at::date, ${statusOrderSQL('e.status')}, e.created_at)
+               > (n.created_at::date, ${statusOrderSQL('n.status')}, n.created_at)
+         )
+       RETURNING *`,
+      [result.rows[0].id]
+    );
     await recalculateJobStatus(req.params.id);
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(added || result.rows[0]);
   } catch (err) {
     next(err);
   }
 });
 
-// PUT /api/jobs/:id/events/:eventId — update an event's status, date, or notes
+// PUT /api/jobs/:id/events/:eventId — update an event's status, date, notes, or waiting flag
 router.put('/:id/events/:eventId', async (req, res, next) => {
   try {
-    const { status, created_at, notes } = req.body;
+    const { status, created_at, notes, waiting } = req.body;
     if (status && !VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+    if (waiting !== undefined && typeof waiting !== 'boolean') {
+      return res.status(400).json({ error: 'waiting must be true or false' });
     }
     // $3 flags whether caller explicitly sent a notes field (so clearing '' works correctly)
     const notesProvided = 'notes' in req.body;
@@ -245,11 +255,13 @@ router.put('/:id/events/:eventId', async (req, res, next) => {
       `UPDATE job_status_events e
        SET status = COALESCE($1, e.status),
            created_at = COALESCE($2, e.created_at),
-           notes = CASE WHEN $3 THEN $4 ELSE e.notes END
+           notes = CASE WHEN $3 THEN $4 ELSE e.notes END,
+           waiting = COALESCE($8, e.waiting)
        FROM jobs j
        WHERE e.id = $5 AND e.job_id = $7 AND e.job_id = j.id AND j.user_id = $6
        RETURNING e.*`,
-      [status || null, created_at || null, notesProvided, notes || null, req.params.eventId, req.user.id, req.params.id]
+      [status || null, created_at || null, notesProvided, notes || null, req.params.eventId, req.user.id, req.params.id,
+       waiting ?? null]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Event not found' });
     await recalculateJobStatus(req.params.id);
@@ -299,3 +311,4 @@ router.delete('/:id', async (req, res, next) => {
 module.exports = router;
 module.exports.recalculateJobStatus = recalculateJobStatus;
 module.exports.deriveJobState = deriveJobState;
+module.exports.statusOrderSQL = statusOrderSQL;

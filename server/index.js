@@ -6,7 +6,8 @@ const pool = require('./db');
 
 const authRoutes = require('./routes/auth');
 const jobRoutes = require('./routes/jobs');
-const { recalculateJobStatus } = jobRoutes;
+const { recalculateJobStatus, statusOrderSQL } = jobRoutes;
+const { ACTIVE_STAGES } = require('./statuses');
 const experimentRoutes = require('./routes/experiments');
 const statsRoutes = require('./routes/stats');
 const adminRoutes = require('./routes/admin');
@@ -104,8 +105,20 @@ async function start() {
     )
   `);
   await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS furthest_status TEXT`);
-  // The status the user marked as "waiting on them"; it only counts while the job is still at that status
+  // Legacy: job-level "waiting" mark from before it moved onto each history event (see below)
   await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS waiting_status TEXT`);
+
+  // Each OA/Interview event is either still to do (false) or done and waiting to hear back (true)
+  const { rows: [{ exists: hadWaitingColumn }] } = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'job_status_events' AND column_name = 'waiting'
+    ) AS exists
+  `);
+  await pool.query(`ALTER TABLE job_status_events ADD COLUMN IF NOT EXISTS waiting BOOLEAN NOT NULL DEFAULT FALSE`);
+  if (!hadWaitingColumn) {
+    await migrateWaitingToEvents();
+  }
   await pool.query(`ALTER TABLE job_status_events ADD COLUMN IF NOT EXISTS notes TEXT`);
 
   // Backfill: create an Applied event for any job with no event history
@@ -123,6 +136,29 @@ async function start() {
 
   // Runs after the server is listening so a long job list doesn't delay the first request
   recalculateAllJobs().catch(err => console.error('Background recalculation failed:', err));
+}
+
+// One-off, the first time events get a waiting flag:
+//  - every OA/Interview event that isn't a job's latest event is a finished round → waiting
+//  - a job marked waiting at its current stage passes that mark to its latest event
+async function migrateWaitingToEvents() {
+  const stages = ACTIVE_STAGES.map(s => `'${s}'`).join(', ');
+  await pool.query(`
+    WITH ranked AS (
+      SELECT e.id, e.job_id,
+             ROW_NUMBER() OVER (
+               PARTITION BY e.job_id
+               ORDER BY e.created_at::date DESC, ${statusOrderSQL('e.status')} DESC, e.created_at DESC
+             ) AS rn
+      FROM job_status_events e
+    )
+    UPDATE job_status_events e SET waiting = TRUE
+    FROM ranked r, jobs j
+    WHERE e.id = r.id AND j.id = e.job_id AND e.status IN (${stages})
+      AND (r.rn > 1 OR (j.waiting_status IS NOT NULL AND j.waiting_status = j.status))
+  `);
+  await pool.query('UPDATE jobs SET waiting_status = NULL WHERE waiting_status IS NOT NULL');
+  console.log('Moved waiting marks onto history events');
 }
 
 // Recalculate status + furthest_status for every job from its event history

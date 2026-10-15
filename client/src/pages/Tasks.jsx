@@ -3,79 +3,87 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import AppHeader from '../components/AppHeader'
 import TaskPanel from '../components/TaskPanel'
-import { nextStep } from '../nextStep'
 
-// To do page: every open task, soonest due first, plus OA/Interview jobs that are
-// still to do but have no task yet — each can get a task or be marked as waiting.
+function formatDay(dateStr) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+// To do page: open tasks (soonest due first), then OA/Interview rounds still marked to do.
+// A round can get a task for the details, or be marked as waiting once it's done.
 export default function Tasks() {
   const { apiFetch } = useAuth()
   const [jobs, setJobs] = useState([])
   const [tasks, setTasks] = useState(null) // null until TaskPanel has loaded
+  const [stages, setStages] = useState(null) // null until loaded
   const [addFor, setAddFor] = useState(null)
   const [error, setError] = useState('')
 
-  // Jobs for the "which job?" picker, A–Z by company
   useEffect(() => {
-    async function fetchJobs() {
+    async function fetchJobsAndStages() {
       try {
-        const res = await apiFetch('/api/jobs')
-        if (!res.ok) return
-        const data = await res.json()
-        setJobs([...data].sort((a, b) => a.company.localeCompare(b.company, 'en', { sensitivity: 'base' })))
+        const [jobsRes, stagesRes] = await Promise.all([
+          apiFetch('/api/jobs'),
+          apiFetch('/api/tasks/stages'),
+        ])
+        // Jobs for the "which job?" picker, A–Z by company
+        if (jobsRes.ok) {
+          const data = await jobsRes.json()
+          setJobs([...data].sort((a, b) => a.company.localeCompare(b.company, 'en', { sensitivity: 'base' })))
+        }
+        setStages(stagesRes.ok ? await stagesRes.json() : [])
       } catch {
-        // The task list still works; only the picker and job list are empty
+        setStages([])
+        setError('Network error — some of the list could not be loaded')
       }
     }
-    fetchJobs()
+    fetchJobsAndStages()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Open tasks per job, from the live task list (job.open_tasks goes stale as tasks change here)
-  const openByJob = {}
-  for (const t of tasks || []) {
-    if (!t.done_at) openByJob[t.job_id] = (openByJob[t.job_id] || 0) + 1
-  }
-  const openTaskCount = Object.values(openByJob).reduce((a, b) => a + b, 0)
-  const jobsToActOn = tasks === null ? [] : jobs.filter(job => !openByJob[job.id] && nextStep(job, 0) === 'todo')
-
-  async function handleMarkWaiting(job) {
+  async function handleMarkWaiting(stage) {
     setError('')
     try {
-      const res = await apiFetch(`/api/jobs/${job.id}/waiting`, {
+      const res = await apiFetch(`/api/jobs/${stage.job_id}/events/${stage.id}`, {
         method: 'PUT',
         body: JSON.stringify({ waiting: true }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Could not update that job'); return }
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, waiting_status: data.waiting_status } : j))
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Could not update that round')
+        return
+      }
+      setStages(prev => prev.filter(s => s.id !== stage.id))
     } catch {
-      setError('Network error — the job was not updated')
+      setError('Network error — the round was not updated')
     }
   }
 
-  const jobsSection = jobsToActOn.length > 0 && (
+  const openTaskCount = (tasks || []).filter(t => !t.done_at).length
+  const loaded = tasks !== null && stages !== null
+
+  const stagesSection = stages && (stages.length > 0 || error) && (
     <div className="todo-jobs">
-      <p className="history-label">No task yet</p>
+      <p className="history-label">Rounds to do</p>
       {error && <p className="error-msg">{error}</p>}
       <ul className="task-list">
-        {jobsToActOn.map(job => (
-          <li key={job.id} className="task-item">
+        {stages.map(stage => (
+          <li key={stage.id} className="task-item">
             <div className="task-body">
               <p className="task-title">
-                <Link to={`/jobs/${job.id}/edit`} className="task-job-title">
-                  {job.company} · {job.job_title}
+                <Link to={`/jobs/${stage.job_id}/edit`} className="task-job-title">
+                  {stage.company} · {stage.job_title}
                 </Link>
               </p>
               <p className="task-meta">
-                <span className={`status-badge status-${job.status.toLowerCase()} event-badge`}>{job.status}</span>
-                {' '}Add what you need to do, or mark it as waiting once you've done it.
+                <span className={`status-badge status-${stage.status.toLowerCase()} event-badge`}>{stage.status}</span>
+                {' '}since {formatDay(stage.created_at)}
               </p>
             </div>
             <div className="task-actions">
-              <button type="button" className="btn-edit-card" onClick={() => setAddFor({ jobId: job.id })}>
+              <button type="button" className="btn-edit-card" onClick={() => setAddFor({ jobId: stage.job_id })}>
                 + Task
               </button>
-              <button type="button" className="btn-edit-card" onClick={() => handleMarkWaiting(job)}>
-                Mark waiting
+              <button type="button" className="btn-edit-card" onClick={() => handleMarkWaiting(stage)}>
+                Waiting
               </button>
             </div>
           </li>
@@ -86,8 +94,8 @@ export default function Tasks() {
 
   return (
     <div className="dashboard">
-      <AppHeader todoCount={tasks === null ? undefined : openTaskCount + jobsToActOn.length} />
-      <TaskPanel jobs={jobs} onTasksChange={setTasks} addFor={addFor} extra={jobsSection} />
+      <AppHeader todoCount={loaded ? openTaskCount + stages.length : undefined} />
+      <TaskPanel jobs={jobs} onTasksChange={setTasks} addFor={addFor} extra={stagesSection} />
     </div>
   )
 }
