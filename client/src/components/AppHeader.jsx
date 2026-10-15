@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { nextStep } from '../nextStep'
+import { todoItems } from '../nextStep'
 
 // Warn the admin once this share of the account limit is used
 const NEARLY_FULL = 0.8
@@ -15,7 +15,7 @@ export default function AppHeader({ todoCount }) {
   const [admin, setAdmin] = useState(null) // { isAdmin, userCount, maxUsers } once loaded
   const [fetchedTodoCount, setFetchedTodoCount] = useState(null)
 
-  // To do count = open tasks + OA/Interview jobs still to do that have no task yet
+  // To do count = open tasks + OA/Interview rounds still marked to do
   useEffect(() => {
     if (todoCount !== undefined) return // the page is supplying a live count
     async function fetchTodoCount() {
@@ -23,8 +23,7 @@ export default function AppHeader({ todoCount }) {
         const res = await apiFetch('/api/jobs')
         if (!res.ok) return
         const jobs = await res.json()
-        setFetchedTodoCount(jobs.reduce((n, job) =>
-          n + (job.open_tasks > 0 ? job.open_tasks : nextStep(job) === 'todo' ? 1 : 0), 0))
+        setFetchedTodoCount(jobs.reduce((n, job) => n + todoItems(job), 0))
       } catch {
         // Not critical — the tab just shows no count
       }

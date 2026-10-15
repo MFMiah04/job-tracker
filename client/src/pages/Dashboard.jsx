@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES } from '../constants'
 import AppHeader from '../components/AppHeader'
-import { nextStep } from '../nextStep'
+import { nextStep, todoItems } from '../nextStep'
 
 // An application still at 'Applied' after this many days is flagged as likely ghosted
 const STALE_DAYS = 21
@@ -257,7 +257,7 @@ export default function Dashboard() {
                     <div className="job-card-right">
                       {isTodo(job) && (
                         <span className="todo-tag" title="Something for you to do on this application">
-                          {job.open_tasks > 0 ? `${job.open_tasks} to do` : 'To do'}
+                          {todoItems(job) > 1 ? `${todoItems(job)} to do` : 'To do'}
                         </span>
                       )}
                       {isWaiting(job) && (

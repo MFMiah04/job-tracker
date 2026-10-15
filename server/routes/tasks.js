@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
+const { ACTIVE_STAGES } = require('../statuses');
 
 const router = express.Router();
 router.use(verifyToken);
@@ -49,6 +50,24 @@ router.get('/', async (req, res, next) => {
        WHERE t.user_id = $1 AND ($2::int IS NULL OR t.job_id = $2::int)
        ORDER BY (t.done_at IS NOT NULL), t.due_at ASC NULLS LAST, t.given_at ASC, t.id ASC`,
       [req.user.id, jobId ?? null]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/tasks/stages — OA/Interview history events still marked to do, oldest first
+router.get('/stages', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT e.id, e.job_id, e.status, to_char(e.created_at, 'YYYY-MM-DD') AS created_at,
+              j.company, j.job_title
+       FROM job_status_events e
+       JOIN jobs j ON j.id = e.job_id
+       WHERE j.user_id = $1 AND e.status = ANY($2::text[]) AND NOT e.waiting
+       ORDER BY e.created_at ASC, e.id ASC`,
+      [req.user.id, ACTIVE_STAGES]
     );
     res.status(200).json(result.rows);
   } catch (err) {
