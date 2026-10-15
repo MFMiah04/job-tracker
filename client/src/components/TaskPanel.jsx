@@ -24,7 +24,9 @@ function sortTasks(tasks) {
 
 // List of tasks with add, edit, tick-off and delete.
 // On the To do page pass `jobs` (for the job picker); on a job's edit page pass its `jobId` instead.
-export default function TaskPanel({ jobId, jobs, onOpenCountChange }) {
+// onTasksChange receives the current task list; addFor = { jobId } opens the add form for that job;
+// `extra` is rendered between the open tasks and the Done list.
+export default function TaskPanel({ jobId, jobs, onTasksChange, addFor, extra }) {
   const { apiFetch } = useAuth()
 
   const emptyValues = () => ({ job_id: jobId ?? '', title: '', link: '', given_at: todayStr(), due_at: '' })
@@ -60,13 +62,21 @@ export default function TaskPanel({ jobId, jobs, onOpenCountChange }) {
   const doneTasks = tasks.filter(t => t.done_at)
 
   useEffect(() => {
-    if (!loading) onOpenCountChange?.(openTasks.length)
-  }, [loading, openTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!loading) onTasksChange?.(tasks)
+  }, [loading, tasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function startAdd() {
-    setValues(emptyValues())
+  function startAdd(presetJobId) {
+    setValues({ ...emptyValues(), ...(presetJobId && { job_id: presetJobId }) })
     setFormError('')
     setForm({ id: null })
+  }
+
+  // "Add task" pressed on a job elsewhere on the page — open the form for that job.
+  // Done during render when addFor changes (React's pattern for reacting to a new prop).
+  const [lastAddFor, setLastAddFor] = useState(addFor)
+  if (addFor !== lastAddFor) {
+    setLastAddFor(addFor)
+    if (addFor) startAdd(addFor.jobId)
   }
 
   function startEdit(task) {
@@ -192,8 +202,10 @@ export default function TaskPanel({ jobId, jobs, onOpenCountChange }) {
           submitLabel="Add task"
         />
       ) : (
-        <button type="button" className="btn-add-exp" onClick={startAdd}>+ Add task</button>
+        <button type="button" className="btn-add-exp" onClick={() => startAdd()}>+ Add task</button>
       )}
+
+      {extra}
 
       {doneTasks.length > 0 && (
         <div className="task-done-section">

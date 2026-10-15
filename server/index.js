@@ -104,6 +104,8 @@ async function start() {
     )
   `);
   await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS furthest_status TEXT`);
+  // The status the user marked as "waiting on them"; it only counts while the job is still at that status
+  await pool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS waiting_status TEXT`);
   await pool.query(`ALTER TABLE job_status_events ADD COLUMN IF NOT EXISTS notes TEXT`);
 
   // Backfill: create an Applied event for any job with no event history
