@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES } from '../constants'
 import AppHeader from '../components/AppHeader'
+import { nextStep } from '../nextStep'
 
 // An application still at 'Applied' after this many days is flagged as likely ghosted
 const STALE_DAYS = 21
@@ -49,17 +50,8 @@ function lastUpdated(job) {
   return job.last_event_at || job.applied_at
 }
 
-// Stages where the next step is on you (a task) or on them (waiting)
-const ACTIVE_STAGES = ['OA', 'Interview']
-
-function hasOpenTasks(job) {
-  return job.open_tasks > 0
-}
-
-// At OA/Interview with nothing left to do — the ball is in their court
-function isWaiting(job) {
-  return ACTIVE_STAGES.includes(job.status) && !hasOpenTasks(job)
-}
+const isTodo = job => nextStep(job) === 'todo'
+const isWaiting = job => nextStep(job) === 'waiting'
 
 function isStale(job) {
   return job.status === 'Applied' && job.applied_at && daysAgo(job.applied_at) >= STALE_DAYS
@@ -157,11 +149,11 @@ export default function Dashboard() {
     return acc
   }, {})
   const staleCount = jobs.filter(isStale).length
-  const todoCount = jobs.filter(hasOpenTasks).length
+  const todoCount = jobs.filter(isTodo).length
   const waitingCount = jobs.filter(isWaiting).length
 
   // Filters that aren't a plain status
-  const SPECIAL_FILTERS = { stale: isStale, todo: hasOpenTasks, waiting: isWaiting }
+  const SPECIAL_FILTERS = { stale: isStale, todo: isTodo, waiting: isWaiting }
 
   const query = search.trim().toLowerCase()
   const visibleJobs = sortJobs(
@@ -213,7 +205,7 @@ export default function Dashboard() {
               {STATUSES.map(s => (
                 <option key={s} value={s}>{s} ({statusCounts[s] || 0})</option>
               ))}
-              <option value="todo">Tasks to do ({todoCount})</option>
+              <option value="todo">To do ({todoCount})</option>
               <option value="waiting">Waiting on them ({waitingCount})</option>
               <option value="stale">No reply in {STALE_DAYS}+ days ({staleCount})</option>
             </select>
@@ -263,13 +255,13 @@ export default function Dashboard() {
                       <span className="job-title">{job.job_title}</span>
                     </p>
                     <div className="job-card-right">
-                      {hasOpenTasks(job) && (
-                        <span className="todo-tag" title="Open tasks for this job">
-                          {job.open_tasks} to do
+                      {isTodo(job) && (
+                        <span className="todo-tag" title="Something for you to do on this application">
+                          {job.open_tasks > 0 ? `${job.open_tasks} to do` : 'To do'}
                         </span>
                       )}
                       {isWaiting(job) && (
-                        <span className="waiting-tag" title="Nothing left for you to do — waiting to hear back">
+                        <span className="waiting-tag" title="You've marked this stage done — waiting to hear back">
                           Waiting
                         </span>
                       )}

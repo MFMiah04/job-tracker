@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES, PIPELINE_RANK } from '../constants'
 import TaskPanel from '../components/TaskPanel'
+import { ACTIVE_STAGES, nextStep, canMarkWaiting } from '../nextStep'
 
 const EMPTY_FORM = {
   company: '',
@@ -36,6 +37,9 @@ export default function JobForm() {
   const [fetchError, setFetchError] = useState('')
   const [error, setError] = useState('')
   const [events, setEvents] = useState([])
+  const [job, setJob] = useState(null) // { status, waiting_status } for the To do / Waiting switch
+  const [jobTasks, setJobTasks] = useState([])
+  const [waitingError, setWaitingError] = useState('')
   const [eventError, setEventError] = useState('')
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [newEvent, setNewEvent] = useState({ status: 'Applied', created_at: '', notes: '' })
@@ -55,6 +59,7 @@ export default function JobForm() {
           setFetchError(data.error || 'Failed to load job')
           return
         }
+        setJob({ status: data.status, waiting_status: data.waiting_status })
         setForm({
           company: data.company || '',
           job_title: data.job_title || '',
@@ -79,6 +84,34 @@ export default function JobForm() {
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
+  // History changes can change the job's status, so re-read it for the To do / Waiting switch
+  async function refreshJob() {
+    try {
+      const res = await apiFetch(`/api/jobs/${id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setJob({ status: data.status, waiting_status: data.waiting_status })
+      }
+    } catch {
+      // The switch just keeps its previous state
+    }
+  }
+
+  async function handleSetWaiting(waiting) {
+    setWaitingError('')
+    try {
+      const res = await apiFetch(`/api/jobs/${id}/waiting`, {
+        method: 'PUT',
+        body: JSON.stringify({ waiting }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setWaitingError(data.error || 'Could not update this job'); return }
+      setJob({ status: data.status, waiting_status: data.waiting_status })
+    } catch {
+      setWaitingError('Network error — the change was not saved')
+    }
+  }
+
   // Sends an event request and reports failure in the History section.
   // Returns the response on success, null on failure.
   async function saveEvent(path, options) {
@@ -100,7 +133,10 @@ export default function JobForm() {
       method: 'PUT',
       body: JSON.stringify({ created_at: newDate }),
     })
-    if (res) setEvents(prev => sortEvents(prev))
+    if (res) {
+      setEvents(prev => sortEvents(prev))
+      refreshJob()
+    }
   }
 
   async function handleEventNotesBlur(eventId, notes) {
@@ -117,13 +153,17 @@ export default function JobForm() {
     })
     if (res) {
       setEvents(prev => sortEvents(prev.map(e => e.id === ev.id ? { ...e, status: newStatus } : e)))
+      refreshJob()
     }
   }
 
   async function handleDeleteEvent(eventId) {
     if (!window.confirm('Delete this history event?')) return
     const res = await saveEvent(`/api/jobs/${id}/events/${eventId}`, { method: 'DELETE' })
-    if (res) setEvents(prev => prev.filter(e => e.id !== eventId))
+    if (res) {
+      setEvents(prev => prev.filter(e => e.id !== eventId))
+      refreshJob()
+    }
   }
 
   async function handleAddEvent() {
@@ -137,6 +177,7 @@ export default function JobForm() {
       setEvents(prev => sortEvents([...prev, data]))
       setNewEvent({ status: 'Applied', created_at: '', notes: '' })
       setShowAddEvent(false)
+      refreshJob()
     }
   }
 
@@ -267,7 +308,35 @@ export default function JobForm() {
           {isEditing && (
             <div className="history-section">
               <p className="history-label">Tasks</p>
-              <TaskPanel jobId={id} />
+              {job && ACTIVE_STAGES.includes(job.status) && (() => {
+                const openTasks = jobTasks.filter(t => !t.done_at).length
+                const step = nextStep(job, openTasks)
+                const canWait = canMarkWaiting(job, openTasks)
+                return (
+                  <div className="next-step">
+                    <span className="next-step-label">{job.status} stage:</span>
+                    <div className="next-step-switch" role="group" aria-label="Next step">
+                      <button
+                        type="button"
+                        className={step === 'todo' ? 'active' : ''}
+                        aria-pressed={step === 'todo'}
+                        onClick={() => step === 'waiting' && handleSetWaiting(false)}
+                      >To do</button>
+                      <button
+                        type="button"
+                        className={step === 'waiting' ? 'active' : ''}
+                        aria-pressed={step === 'waiting'}
+                        disabled={!canWait}
+                        title={canWait ? '' : 'Tick off this job\'s tasks first'}
+                        onClick={() => step === 'todo' && handleSetWaiting(true)}
+                      >Waiting on them</button>
+                    </div>
+                    {!canWait && <span className="next-step-hint">Tick off this job's tasks first</span>}
+                    {waitingError && <p className="error-msg">{waitingError}</p>}
+                  </div>
+                )
+              })()}
+              <TaskPanel jobId={id} onTasksChange={setJobTasks} />
             </div>
           )}
 

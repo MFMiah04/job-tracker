@@ -1,30 +1,35 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { nextStep } from '../nextStep'
 
 // Warn the admin once this share of the account limit is used
 const NEARLY_FULL = 0.8
 
 // Title bar and the page tabs, shared by the main pages.
 // The admin account also gets an Admin tab and a notice when sign-ups are nearly or completely full.
-// The To do page passes `openTasks` so the tab count updates as tasks are ticked off.
-export default function AppHeader({ openTasks }) {
+// The To do page passes `todoCount` so the tab count updates as things are ticked off.
+export default function AppHeader({ todoCount }) {
   const { user, logout, apiFetch } = useAuth()
   const navigate = useNavigate()
   const [admin, setAdmin] = useState(null) // { isAdmin, userCount, maxUsers } once loaded
-  const [fetchedOpenTasks, setFetchedOpenTasks] = useState(null)
+  const [fetchedTodoCount, setFetchedTodoCount] = useState(null)
 
+  // To do count = open tasks + OA/Interview jobs still to do that have no task yet
   useEffect(() => {
-    if (openTasks !== undefined) return // the page is supplying a live count
-    async function fetchOpenTasks() {
+    if (todoCount !== undefined) return // the page is supplying a live count
+    async function fetchTodoCount() {
       try {
-        const res = await apiFetch('/api/tasks')
-        if (res.ok) setFetchedOpenTasks((await res.json()).filter(t => !t.done_at).length)
+        const res = await apiFetch('/api/jobs')
+        if (!res.ok) return
+        const jobs = await res.json()
+        setFetchedTodoCount(jobs.reduce((n, job) =>
+          n + (job.open_tasks > 0 ? job.open_tasks : nextStep(job) === 'todo' ? 1 : 0), 0))
       } catch {
         // Not critical — the tab just shows no count
       }
     }
-    fetchOpenTasks()
+    fetchTodoCount()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -44,7 +49,7 @@ export default function AppHeader({ openTasks }) {
     navigate('/login')
   }
 
-  const openCount = openTasks ?? fetchedOpenTasks
+  const openCount = todoCount ?? fetchedTodoCount
   const isAdmin = Boolean(admin?.isAdmin)
   const isFull = isAdmin && admin.userCount >= admin.maxUsers
   const isNearlyFull = isAdmin && !isFull && admin.userCount >= admin.maxUsers * NEARLY_FULL

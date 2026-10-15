@@ -166,6 +166,28 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
+// PUT /api/jobs/:id/waiting — mark the job's current stage as "waiting on them" (or back to to-do).
+// Stored as the status it applies to, so moving to a new stage makes the job to-do again automatically.
+router.put('/:id/waiting', async (req, res, next) => {
+  try {
+    if (typeof req.body?.waiting !== 'boolean') {
+      return res.status(400).json({ error: 'waiting must be true or false' });
+    }
+    const result = await pool.query(
+      `UPDATE jobs SET waiting_status = CASE WHEN $1 THEN status ELSE NULL END
+       WHERE id = $2 AND user_id = $3
+       RETURNING id, status, waiting_status`,
+      [req.body.waiting, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/jobs/:id/events — status history for a job
 router.get('/:id/events', async (req, res, next) => {
   try {
