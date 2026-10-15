@@ -58,7 +58,6 @@ export default function Tasks() {
   }
 
   const openTaskCount = (tasks || []).filter(t => !t.done_at).length
-  const loaded = tasks !== null && stages !== null
 
   const stagesSection = stages && (stages.length > 0 || error) && (
     <div className="todo-jobs">
@@ -99,7 +98,7 @@ export default function Tasks() {
 
   return (
     <div className="dashboard">
-      <AppHeader todoCount={loaded ? openTaskCount + stages.length : undefined} />
+      <AppHeader todoCount={tasks === null ? undefined : openTaskCount} />
       <TaskPanel jobs={jobs} onTasksChange={setTasks} addFor={addFor} extra={stagesSection} />
     </div>
   )
