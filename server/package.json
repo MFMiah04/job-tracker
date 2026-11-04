@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "snapshot": "node scripts/snapshot.js"
   },
   "keywords": [],
   "author": "",
