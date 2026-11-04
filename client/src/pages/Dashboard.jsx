@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES } from '../constants'
 import AppHeader from '../components/AppHeader'
-import { nextStep, todoItems } from '../nextStep'
+import { nextStep } from '../nextStep'
 
 // An application still at 'Applied' after this many days is flagged as likely ghosted
 const STALE_DAYS = 21
@@ -167,12 +167,13 @@ export default function Dashboard() {
     sortBy
   )
   const isFiltered = query !== '' || statusFilter !== 'all'
+  // Filter counts are left off until the jobs have loaded, rather than showing (0)
+  const countLabel = n => loading ? '' : ` (${n})`
 
   return (
     <div className="dashboard">
       <AppHeader />
 
-      {loading && <p className="status-msg">Loading…</p>}
       {error && <p className="error-msg">{error}</p>}
 
       {!loading && !error && jobs.length === 0 && (
@@ -184,7 +185,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {jobs.length > 0 && (
+      {/* The search row shows while jobs are still loading, so you can start typing straight away */}
+      {(loading || jobs.length > 0) && (
         <>
           <div className="job-toolbar">
             <input
@@ -201,13 +203,13 @@ export default function Dashboard() {
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
             >
-              <option value="all">All statuses ({jobs.length})</option>
+              <option value="all">All statuses{countLabel(jobs.length)}</option>
               {STATUSES.map(s => (
-                <option key={s} value={s}>{s} ({statusCounts[s] || 0})</option>
+                <option key={s} value={s}>{s}{countLabel(statusCounts[s] || 0)}</option>
               ))}
-              <option value="todo">To do ({todoCount})</option>
-              <option value="waiting">Waiting on them ({waitingCount})</option>
-              <option value="stale">No reply in {STALE_DAYS}+ days ({staleCount})</option>
+              <option value="todo">Has tasks to do{countLabel(todoCount)}</option>
+              <option value="waiting">Waiting on them{countLabel(waitingCount)}</option>
+              <option value="stale">No reply in {STALE_DAYS}+ days{countLabel(staleCount)}</option>
             </select>
             <select
               className="job-filter"
@@ -219,13 +221,15 @@ export default function Dashboard() {
             </select>
           </div>
 
-          {isFiltered && (
+          {loading && <p className="status-msg">Loading applications… the server can take up to a minute to wake up.</p>}
+
+          {!loading && isFiltered && (
             <p className="job-count">
               Showing {visibleJobs.length} of {jobs.length}
             </p>
           )}
 
-          {visibleJobs.length === 0 && (
+          {!loading && visibleJobs.length === 0 && (
             <p className="status-msg">No applications match.</p>
           )}
 
@@ -256,8 +260,8 @@ export default function Dashboard() {
                     </p>
                     <div className="job-card-right">
                       {isTodo(job) && (
-                        <span className="todo-tag" title="Something for you to do on this application">
-                          {todoItems(job) > 1 ? `${todoItems(job)} to do` : 'To do'}
+                        <span className="todo-tag" title="Open tasks for this application">
+                          {job.open_tasks} to do
                         </span>
                       )}
                       {isWaiting(job) && (
