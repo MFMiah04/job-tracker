@@ -21,6 +21,10 @@ export function AuthProvider({ children }) {
   function logout() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    // Forget the header's remembered counts (see AppHeader) so the next account starts clean
+    Object.keys(localStorage)
+      .filter(key => key.startsWith('header:'))
+      .forEach(key => localStorage.removeItem(key))
     setToken(null)
     setUser(null)
   }

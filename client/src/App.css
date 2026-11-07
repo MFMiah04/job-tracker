@@ -628,6 +628,28 @@
   font-size: var(--text-xl);
 }
 
+/* Edit page: back button and the auto-save note under the title */
+.btn-back {
+  display: inline-block;
+  margin-bottom: var(--space-3);
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.save-state {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
+.save-state.invalid,
+.save-state.error {
+  color: var(--color-error);
+}
+
 .back-link {
   font-size: var(--text-sm);
   color: var(--color-text-muted);

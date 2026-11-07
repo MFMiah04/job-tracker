@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { STATUSES, PIPELINE_RANK } from '../constants'
 import TaskPanel from '../components/TaskPanel'
@@ -12,6 +12,26 @@ const EMPTY_FORM = {
   salary_min: '',
   salary_max: '',
   notes: '',
+}
+
+// How long to wait after the last keystroke before auto-saving an edit
+const AUTOSAVE_DELAY_MS = 700
+
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Stage a new history event most likely is, given the latest one (another round after an interview)
+const NEXT_STATUS = { Applied: 'OA', OA: 'Interview', Interview: 'Interview', Offer: 'Accepted' }
+
+// The job fields as the API wants them: empty salaries become null rather than ''
+function toPayload(form) {
+  return {
+    ...form,
+    salary_min: form.salary_min === '' ? null : Number(form.salary_min),
+    salary_max: form.salary_max === '' ? null : Number(form.salary_max),
+  }
 }
 
 // Same order the server returns events in: by day, then pipeline stage, then time
@@ -31,6 +51,13 @@ export default function JobForm() {
 
   const { apiFetch } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Back to wherever you came from; to Applications if this page was opened directly
+  function goBack() {
+    if (location.key !== 'default') navigate(-1)
+    else navigate('/')
+  }
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [loading, setLoading] = useState(false)
@@ -40,6 +67,12 @@ export default function JobForm() {
   const [eventError, setEventError] = useState('')
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [newEvent, setNewEvent] = useState({ status: 'Applied', created_at: '', notes: '' })
+
+  // Auto-save (edit mode): 'idle' | 'saving' | 'saved' | 'invalid' | 'error'
+  const [saveState, setSaveState] = useState('idle')
+  const savedJson = useRef(null)   // the job as last saved; null until it has loaded
+  const latestForm = useRef(form)  // for saving any pending change when leaving the page
+  const saveTimer = useRef(null)
 
   // In edit mode, fetch the existing job and pre-populate the form
   useEffect(() => {
@@ -56,14 +89,16 @@ export default function JobForm() {
           setFetchError(data.error || 'Failed to load job')
           return
         }
-        setForm({
+        const loaded = {
           company: data.company || '',
           job_title: data.job_title || '',
           source: data.source || '',
           salary_min: data.salary_min ?? '',
           salary_max: data.salary_max ?? '',
           notes: data.notes || '',
-        })
+        }
+        savedJson.current = JSON.stringify(toPayload(loaded))
+        setForm(loaded)
         if (eventsRes.ok) setEvents(await eventsRes.json())
       } catch {
         setFetchError('Network error — is the server running?')
@@ -72,6 +107,73 @@ export default function JobForm() {
 
     fetchJob()
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Saves the job's fields if they've changed since the last save. Returns true when nothing is left unsaved.
+  async function saveNow(current) {
+    const body = JSON.stringify(toPayload(current))
+    if (savedJson.current === null) return true
+    if (body === savedJson.current) {
+      // Back to what's already saved (e.g. a cleared field typed back in) — clear any warning
+      setSaveState(prev => (prev === 'invalid' || prev === 'error' ? 'saved' : prev))
+      return true
+    }
+    if (!current.company.trim() || !current.job_title.trim()) {
+      setSaveState('invalid')
+      return false
+    }
+    setSaveState('saving')
+    setError('')
+    try {
+      const res = await apiFetch(`/api/jobs/${id}`, { method: 'PUT', body })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Could not save your changes')
+        setSaveState('error')
+        return false
+      }
+      savedJson.current = body
+      setSaveState('saved')
+      return true
+    } catch {
+      setError('Network error — your latest changes are not saved yet')
+      setSaveState('error')
+      return false
+    }
+  }
+
+  // Edit mode: save a moment after you stop typing
+  useEffect(() => {
+    latestForm.current = form
+    if (!isEditing || savedJson.current === null) return
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => saveNow(form), AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(saveTimer.current)
+  }, [form]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Leaving the page some other way (a tab, the browser's back button) still saves the last change
+  useEffect(() => {
+    return () => {
+      if (isEditing) saveNow(latestForm.current)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleBack() {
+    clearTimeout(saveTimer.current)
+    if (await saveNow(form)) {
+      goBack()
+      return
+    }
+    if (window.confirm('Your latest changes could not be saved. Leave anyway and lose them?')) {
+      savedJson.current = null // don't try again on the way out
+      goBack()
+    }
+  }
+
+  function openAddEvent() {
+    const latest = events[events.length - 1]
+    setNewEvent({ status: NEXT_STATUS[latest?.status] || latest?.status || 'Applied', created_at: todayStr(), notes: '' })
+    setShowAddEvent(true)
+  }
 
   // Single onChange handler for all fields — [e.target.name] is computed property syntax
   // This avoids writing a separate handler for every field
@@ -158,21 +260,20 @@ export default function JobForm() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // Editing saves automatically; pressing Enter just saves straight away
+    if (isEditing) {
+      clearTimeout(saveTimer.current)
+      saveNow(form)
+      return
+    }
+
     setError('')
     setLoading(true)
 
-    const url = isEditing ? `/api/jobs/${id}` : '/api/jobs'
-    const method = isEditing ? 'PUT' : 'POST'
-
     try {
-      const res = await apiFetch(url, {
-        method,
-        // Convert empty strings to null so the DB gets NULL, not an empty string
-        body: JSON.stringify({
-          ...form,
-          salary_min: form.salary_min === '' ? null : Number(form.salary_min),
-          salary_max: form.salary_max === '' ? null : Number(form.salary_max),
-        }),
+      const res = await apiFetch('/api/jobs', {
+        method: 'POST',
+        body: JSON.stringify(toPayload(form)),
       })
 
       const data = await res.json()
@@ -182,7 +283,7 @@ export default function JobForm() {
         return
       }
 
-      navigate('/')
+      goBack()
     } catch {
       setError('Network error — is the server running?')
     } finally {
@@ -203,7 +304,21 @@ export default function JobForm() {
     <div className="form-page">
       <div className="form-card">
         <div className="form-page-header">
+          {isEditing && (
+            <button type="button" className="back-link btn-back" onClick={handleBack}>← Back</button>
+          )}
           <h1>{isEditing ? 'Edit application' : 'Add application'}</h1>
+          {isEditing && (
+            <p className={`save-state ${saveState}`} aria-live="polite">
+              {{
+                saving: 'Saving…',
+                saved: 'All changes saved',
+                invalid: 'Company and job title are required — not saved',
+                error: 'Not saved',
+                idle: 'Changes save automatically',
+              }[saveState]}
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -373,21 +488,27 @@ export default function JobForm() {
                   />
                 </div>
               ) : (
-                <button type="button" className="btn-add-exp" onClick={() => setShowAddEvent(true)}>
+                <button type="button" className="btn-add-exp" onClick={openAddEvent}>
                   + Add event
                 </button>
               )}
             </div>
           )}
 
-          <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={() => navigate('/')}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Saving…' : isEditing ? 'Save changes' : 'Add application'}
-            </button>
-          </div>
+          {isEditing ? (
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={handleBack}>← Back</button>
+            </div>
+          ) : (
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={goBack}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'Saving…' : 'Add application'}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

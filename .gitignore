@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Personal job data exported by `npm run snapshot` (server/scripts/snapshot.js) — never commit
+snapshot/
