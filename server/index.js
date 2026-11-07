@@ -26,6 +26,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// GET /api/health — for an uptime monitor to ping so Render's free plan doesn't put the server
+// to sleep. Answers instantly and never touches the database.
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/experiments', experimentRoutes);
